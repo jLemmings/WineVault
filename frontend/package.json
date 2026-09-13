@@ -1,0 +1,1 @@
+{"name":"winevault","private":true,"type":"module","scripts":{"dev":"nuxt dev --host 0.0.0.0","build":"nuxt build","preview":"nuxt preview"},"dependencies":{"lucide-vue-next":"^0.468.0","nuxt":"^3.17.5","vue":"^3.5.16"},"devDependencies":{"@playwright/test":"^1.63.0"}}

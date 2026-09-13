@@ -1,0 +1,13 @@
+ALTER TABLE cellars ADD COLUMN revision integer NOT NULL DEFAULT 1;
+ALTER TABLE cellars ADD COLUMN layout jsonb NOT NULL DEFAULT '{"shape":"rectangle","cutoutWidth":1.5,"cutoutDepth":1.2,"floor":"stone","doorWall":"south","doorOffset":4.3,"doorWidth":0.8,"tableEnabled":true,"tableX":2,"tableY":1.5,"tableWidth":1.2,"tableDepth":0.9}';
+ALTER TABLE racks ADD COLUMN rows integer NOT NULL DEFAULT 5 CHECK (rows BETWEEN 1 AND 20);
+ALTER TABLE racks ADD COLUMN columns integer NOT NULL DEFAULT 6 CHECK (columns BETWEEN 1 AND 20);
+ALTER TABLE racks ADD COLUMN x numeric(6,2) NOT NULL DEFAULT 0;
+ALTER TABLE racks ADD COLUMN y numeric(6,2) NOT NULL DEFAULT 0;
+ALTER TABLE racks ADD COLUMN width_m numeric(6,2) NOT NULL DEFAULT 1.2 CHECK (width_m > 0);
+ALTER TABLE racks ADD COLUMN depth_m numeric(6,2) NOT NULL DEFAULT 0.5 CHECK (depth_m > 0);
+ALTER TABLE racks ADD COLUMN rotation integer NOT NULL DEFAULT 0 CHECK (rotation IN (0,90));
+UPDATE racks SET x=0.55,y=0.15,width_m=3.3,depth_m=0.55 WHERE id='A';
+UPDATE racks SET x=4.5,y=1.2,width_m=2,depth_m=0.6,rotation=90 WHERE id='B';
+UPDATE racks SET x=0.55,y=3.45,width_m=3,depth_m=0.6 WHERE id='C';
+UPDATE racks SET x=0.15,y=1.35,width_m=1.5,depth_m=0.5,rotation=90,rows=4,columns=5 WHERE id='D';

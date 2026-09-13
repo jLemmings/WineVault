@@ -1,0 +1,12 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {normalizeBarcode,decodeBarcodePixels} from '../utils/barcode.js'
+
+const L=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011']
+const G=['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111']
+const P=['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL']
+function fixture(input){const code=input.length===12?'0'+input:input;const half=code.length===8?4:6;const digits=code.length===8?code:code.slice(1);const parity=code.length===8?'LLLL':P[Number(code[0])];let bits='101';for(let i=0;i<half;i++)bits+=(parity[i]==='L'?L:G)[Number(digits[i])];bits+='01010';for(let i=half;i<digits.length;i++)bits+=L[Number(digits[i])].replace(/[01]/g,b=>b==='0'?'1':'0');bits+='101';const width=bits.length*3+60,height=150,data=new Uint8ClampedArray(width*height*4);data.fill(255);for(let y=20;y<130;y++)for(let x=30;x<width-30;x++){const value=bits[Math.floor((x-30)/3)]==='1'?30:245;const offset=(y*width+x)*4;data[offset]=data[offset+1]=data[offset+2]=value}return {data,width,height}}
+function rotate(image){const {width,height,data}=image,result=new Uint8ClampedArray(data.length);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const from=(y*width+x)*4,to=(x*height+height-y-1)*4;result.set(data.subarray(from,from+4),to)}return {data:result,width:height,height:width}}
+test('EAN/UPC checksum validation and canonical UPC form',()=>{assert.equal(normalizeBarcode('5901234123457'),'5901234123457');assert.equal(normalizeBarcode('036000291452'),'0036000291452');assert.equal(normalizeBarcode('96385074'),'96385074');assert.equal(normalizeBarcode('5901234123458'),'');assert.equal(normalizeBarcode('abc5901234123457'),'');assert.equal(normalizeBarcode('5901-2341 23457'),'5901234123457')})
+for(const code of ['5901234123457','036000291452','96385074'])test(`Decode ${code} from horizontal and rotated pixels`,()=>{const image=fixture(code);assert.equal(decodeBarcodePixels(image),normalizeBarcode(code));assert.equal(decodeBarcodePixels(rotate(image)),normalizeBarcode(code));assert.equal(decodeBarcodePixels(rotate(rotate(image))),normalizeBarcode(code))})
+test('Invalid checksum and a blank photo must not identify a product',()=>{assert.equal(decodeBarcodePixels(fixture('5901234123458')),'');const data=new Uint8ClampedArray(100*100*4);data.fill(255);assert.equal(decodeBarcodePixels({data,width:100,height:100}),'')})
