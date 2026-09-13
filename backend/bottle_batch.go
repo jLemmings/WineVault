@@ -72,5 +72,6 @@ func (s *Store) addBottleBatch(w http.ResponseWriter, r *http.Request) {
 		databaseError(w, err)
 		return
 	}
+	s.enrichAfterAdd(result[0].ID)
 	writeJSON(w, 201, result)
 }

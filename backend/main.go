@@ -18,14 +18,16 @@ import (
 )
 
 type Bottle struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Vintage int    `json:"vintage"`
-	Region  string `json:"region"`
-	Type    string `json:"type"`
-	Rack    string `json:"rack"`
-	Slot    int    `json:"slot"`
-	Barcode string `json:"barcode,omitempty"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Vintage           int    `json:"vintage"`
+	Region            string `json:"region"`
+	Type              string `json:"type"`
+	Rack              string `json:"rack"`
+	Slot              int    `json:"slot"`
+	Barcode           string `json:"barcode,omitempty"`
+	InformationStatus string `json:"informationStatus,omitempty"`
+	HasInformation    bool   `json:"hasInformation"`
 }
 type Rack struct {
 	ID       string  `json:"id"`
@@ -60,6 +62,7 @@ type Store struct {
 	db            *pgxpool.Pool
 	scanner       *LabelScanner
 	barcodeLookup *BarcodeLookup
+	grapeMinds    *grapeMindsClient
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -125,7 +128,7 @@ type querier interface {
 }
 
 func queryBottles(ctx context.Context, db querier, cellarID string) ([]Bottle, error) {
-	rows, err := db.Query(ctx, `SELECT b.id::text,b.name,b.vintage,b.region,b.wine_type,b.rack_id,b.slot,b.barcode FROM bottles b JOIN racks r ON r.id=b.rack_id WHERE ($1='' OR r.cellar_id=$1) ORDER BY r.position,b.slot`, cellarID)
+	rows, err := db.Query(ctx, `SELECT b.id::text,b.name,b.vintage,b.region,b.wine_type,b.rack_id,b.slot,b.barcode,COALESCE(i.status,'not_fetched'),COALESCE(i.payload IS NOT NULL AND i.fetched_at IS NOT NULL,false) FROM bottles b JOIN racks r ON r.id=b.rack_id LEFT JOIN wine_information i ON i.id=b.information_id WHERE ($1='' OR r.cellar_id=$1) ORDER BY r.position,b.slot`, cellarID)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +136,7 @@ func queryBottles(ctx context.Context, db querier, cellarID string) ([]Bottle, e
 	result := []Bottle{}
 	for rows.Next() {
 		var b Bottle
-		if err = rows.Scan(&b.ID, &b.Name, &b.Vintage, &b.Region, &b.Type, &b.Rack, &b.Slot, &b.Barcode); err != nil {
+		if err = rows.Scan(&b.ID, &b.Name, &b.Vintage, &b.Region, &b.Type, &b.Rack, &b.Slot, &b.Barcode, &b.InformationStatus, &b.HasInformation); err != nil {
 			return nil, err
 		}
 		result = append(result, b)
@@ -192,6 +195,7 @@ func (s *Store) bottles(w http.ResponseWriter, r *http.Request) {
 			databaseError(w, err)
 			return
 		}
+		s.enrichAfterAdd(b.ID)
 		writeJSON(w, 201, b)
 	case http.MethodDelete:
 		id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
@@ -227,6 +231,10 @@ func (s *Store) dataRoutes() http.Handler {
 	mux.HandleFunc("DELETE /api/racks/{id}", s.deleteRack)
 	mux.HandleFunc("/api/bottles", s.bottles)
 	mux.HandleFunc("POST /api/bottles/batch", s.addBottleBatch)
+	mux.HandleFunc("PUT /api/bottles/{id}/location", s.moveBottle)
+	mux.HandleFunc("GET /api/bottles/{id}/information", s.wineInformation)
+	mux.HandleFunc("POST /api/bottles/{id}/information", s.retryWineInformation)
+	mux.HandleFunc("POST /api/bottles/{id}/information/search", s.searchWineInformation)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -269,7 +277,7 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	store := &Store{db: pool, scanner: newLabelScanner(), barcodeLookup: newBarcodeLookup()}
+	store := &Store{db: pool, scanner: newLabelScanner(), barcodeLookup: newBarcodeLookup(), grapeMinds: newGrapeMindsClient()}
 	auth, err := newAuthService(pool, os.Getenv("AUTH_COOKIE_SECURE") == "true")
 	if err != nil {
 		log.Fatal("Authentication initialization failed: ", err)

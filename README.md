@@ -51,6 +51,20 @@ Authentication validation: run `go test ./...` from `backend/` with `TEST_DATABA
 
 The live browser, editor, and scanner suites require `WINEVAULT_TEST_USERNAME` and `WINEVAULT_TEST_PASSWORD` for an already configured test installation. They sign in using those credentials and never automatically create an owner account. As before, these live suites modify inventory and then clean up their test bottles; those additions/removals also appear in history. Use a test database for them.
 
+## GrapeMinds wine information
+
+Set `GRAPEMINDS_API_KEY=your-key` in `backend/.env` and restart the backend. Migration 007 creates durable wine information records and links existing inventory; migration 008 caches search candidates. This integration uses the account's existing permission to store catalogue data, as confirmed during setup. It does not call the separately billed licence-purchase endpoint.
+
+After a wine is added manually or through scanning, WineVault searches GrapeMinds and fetches its details. An exact, unique name match is attached automatically; ambiguous matches can be chosen in the bottle's **Wine information** section. Wine details are supplementary and do not replace your reviewed name, vintage, or location. Stored information is shared across vintages by bottles with the same wine name, region, and type (ignoring capitalization and repeated spaces). Migration 009 merges existing cache records, preserving the most recent saved details, so all matching bottles show the loaded status without another API request. Full detail JSON, provider ID, timestamps, status, and failures are stored in PostgreSQL. API failures do not undo a bottle addition, and failed reloads preserve previously fetched information.
+
+Existing wines show **Fetch information**. Missing or failed results show **Retry fetch**; **Reload from GrapeMinds** refreshes existing details. Search for the producer and wine name to choose or correct a catalogue match. Temperature advice is excluded from the displayed provider text.
+
+Request usage: a new match normally costs one search plus one details request, including when you choose from cached ambiguous results. Multiple bottles in one batch share that lookup. Opening saved details or adding more identical bottles uses zero additional provider requests. An explicit reload of an already matched wine uses one details request. A different search or retry can use additional requests. The backend logs each provider call's method, endpoint (without search text), and HTTP status; it never logs the API key or raw error response.
+
+Calls use a bounded timeout and are spaced apart; HTTP 429 responses defer subsequent requests. Data is requested in English. The documented detail endpoint supplies catalogue-level information, so it is not presented as vintage-specific analysis. No extra drinking-window, region, or producer-insight endpoints are fetched. See the [GrapeMinds API reference](https://www.grapeminds.eu/developers/endpoints).
+
+Run `node tests/information.mjs` from `frontend/` for the mocked browser checks. The Go integration tests verify persistence, shared caching, retries, and exact request counts with a mock provider; they make no live GrapeMinds calls.
+
 ## Photo and barcode scanner
 
 Choose **Scan label** (or **Fill from a label photo** in Add wine). The scanner offers two modes:
@@ -168,6 +182,8 @@ Run `node tests/editors.mjs` from `frontend/` to check dragging, room save/reloa
 For production, run the Go service alongside `node .output/server/index.mjs` from `frontend/`. This is a single-user local application; add authentication and access controls before public deployment.
 
 ## Wine history
+
+To relocate a bottle, open it from Wine Collection or a rack, choose **Move bottle**, select the destination rack and an empty slot, and choose **Confirm move**. If several bottles match, first select the exact bottle in the highlighted front view. Moves preserve the bottle's identity and do not count as additions or enjoyed bottles. Restart the backend after updating to enable the move endpoint.
 
 Choose **History** in the sidebar to see dated additions and enjoyed bottles, filter by activity, and load older entries. Each bottle keeps a snapshot of its wine details and shelf address even after it is enjoyed or its shelf changes. Restart the backend to apply migration 005 and enable tracking. Earlier additions and removals were not recorded and cannot be reconstructed; existing inventory is not assigned invented addition dates. Batch history commits with the bottles, so failed additions do not create history entries.
 

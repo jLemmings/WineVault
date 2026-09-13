@@ -31,6 +31,15 @@ var historySchema string
 //go:embed migrations/006_auth.sql
 var authSchema string
 
+//go:embed migrations/007_wine_information.sql
+var informationSchema string
+
+//go:embed migrations/008_information_search_cache.sql
+var informationSearchSchema string
+
+//go:embed migrations/009_shared_wine_information.sql
+var sharedInformationSchema string
+
 // Schema, seed/import, and migration marker commit together exactly once.
 func migrate(ctx context.Context, pool *pgxpool.Pool, legacyPath string) error {
 	tx, err := pool.Begin(ctx)
@@ -139,6 +148,39 @@ func migrateEditors(ctx context.Context, tx pgx.Tx) error {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(6)"); err != nil {
+			return err
+		}
+	}
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=7)").Scan(&applied); err != nil {
+		return err
+	}
+	if !applied {
+		if _, err := tx.Exec(ctx, informationSchema); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(7)"); err != nil {
+			return err
+		}
+	}
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=8)").Scan(&applied); err != nil {
+		return err
+	}
+	if !applied {
+		if _, err := tx.Exec(ctx, informationSearchSchema); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(8)"); err != nil {
+			return err
+		}
+	}
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=9)").Scan(&applied); err != nil {
+		return err
+	}
+	if !applied {
+		if _, err := tx.Exec(ctx, sharedInformationSchema); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(9)"); err != nil {
 			return err
 		}
 	}

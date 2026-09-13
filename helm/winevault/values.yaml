@@ -1,0 +1,53 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/winevault
+  tag: latest
+  pullPolicy: IfNotPresent
+
+app:
+  service:
+    type: ClusterIP
+    port: 3000
+  env:
+    authCookieSecure: "true"
+    httpAddr: ":8080"
+    databaseURL: "postgres://winevault:winevault_dev@winevault-postgres:5432/winevault?sslmode=disable"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+postgres:
+  image: postgres:17-alpine
+  user: winevault
+  password: winevault_dev
+  database: winevault
+  port: 5432
+  storage:
+    size: 8Gi
+    className: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
