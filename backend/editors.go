@@ -461,7 +461,8 @@ func (s *Store) deleteRack(w http.ResponseWriter, r *http.Request) {
 		_, err = tx.Exec(ctx, "DELETE FROM racks WHERE id=$1", id)
 	}
 	if err == nil {
-		_, err = tx.Exec(ctx, "UPDATE cellars SET revision=revision+1 WHERE id=$1", c.ID)
+		_, err = tx.Exec(ctx, `UPDATE cellars SET revision=revision+1,preferences=jsonb_set(preferences,'{typeRacks}',
+ COALESCE((SELECT jsonb_object_agg(key,CASE WHEN value=$2 THEN '' ELSE value END) FROM jsonb_each_text(preferences->'typeRacks')),'{}'::jsonb)) WHERE id=$1`, c.ID, id)
 	}
 	if err == nil {
 		err = tx.Commit(ctx)

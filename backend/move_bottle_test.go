@@ -9,7 +9,7 @@ import (
 func TestMoveBottle(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}

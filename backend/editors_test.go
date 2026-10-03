@@ -36,7 +36,7 @@ func shelfDraft(c Cellar, r Rack) rackUpdate {
 
 func TestRoomEditorPersistenceAndValidation(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}
@@ -86,7 +86,7 @@ func TestRoomEditorPersistenceAndValidation(t *testing.T) {
 
 func TestShelfEditorProtectsInventory(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}
@@ -137,7 +137,7 @@ func TestShelfEditorProtectsInventory(t *testing.T) {
 
 func TestCreateAndRemoveShelf(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}

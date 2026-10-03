@@ -9,7 +9,7 @@ import (
 func TestWineHistoryPersistsAndRollsBack(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}
@@ -33,7 +33,7 @@ func TestWineHistoryPersistsAndRollsBack(t *testing.T) {
 	if w.Code != 204 {
 		t.Fatal(w.Code)
 	}
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	w = call(s, "GET", "/api/history", "")

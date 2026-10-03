@@ -3,7 +3,7 @@ import { Wine, Check } from 'lucide-vue-next'
 const props=defineProps({bottle:{type:Object,required:true},racks:{type:Array,required:true},bottles:{type:Array,required:true},disabled:{type:Boolean,default:false}})
 const emit=defineEmits(['select'])
 function selectBottle(rack,slot){const candidate=at(rack,slot);if(!props.disabled&&sameWine(candidate))emit('select',candidate)}
-const sameWine=b=>b&&b.name.trim().toLowerCase()===props.bottle.name.trim().toLowerCase()&&b.vintage===props.bottle.vintage&&b.type===props.bottle.type&&b.region.trim().toLowerCase()===props.bottle.region.trim().toLowerCase()
+const sameWine=b=>b&&b.name.trim().replace(/\s+/g,' ').toLowerCase()===props.bottle.name.trim().replace(/\s+/g,' ').toLowerCase()&&b.vintage===props.bottle.vintage&&b.type===props.bottle.type&&b.region.trim().replace(/\s+/g,' ').toLowerCase()===props.bottle.region.trim().replace(/\s+/g,' ').toLowerCase()
 const matches=computed(()=>props.bottles.filter(sameWine))
 const shelves=computed(()=>props.racks.filter(r=>r.id===props.bottle.rack||matches.value.some(b=>b.rack===r.id)))
 const at=(rack,slot)=>props.bottles.find(b=>b.rack===rack&&b.slot===slot)

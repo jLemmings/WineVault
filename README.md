@@ -167,9 +167,9 @@ All editor changes are stored in PostgreSQL. Revision checks prevent an older ed
 
 PostgreSQL is the source of truth for cellar name, owner, room dimensions, rack names, capacities, and all bottles. The frontend loads `/api/cellar` as one consistent database snapshot and calculates totals from those records. There is no JSON or hardcoded inventory fallback when the database is unavailable.
 
-The backend automatically applies its embedded SQL migration on startup. It imports `backend/data/bottles.json` if present (when started from `backend/`), otherwise it seeds 82 example bottles across four racks. The import leaves the original file untouched; bottle IDs are reassigned by PostgreSQL. An existing empty JSON inventory stays empty. Invalid imports fail and roll back the migration instead of silently discarding bottles.
+The backend automatically applies its embedded SQL migrations on startup. A new instance starts with an empty cellar: no example bottles, racks, tasting table, or sample owner identity. Add your own shelves and configure the room through the editors. Owner setup supplies the owner name. If `backend/data/bottles.json` is present (when started from `backend/`), existing legacy inventory is imported using its original rack layout. The import leaves the original file untouched; bottle IDs are reassigned by PostgreSQL. An empty JSON inventory stays empty with no racks. Invalid imports fail and roll back the migration instead of silently discarding bottles.
 
-Migration records prevent repeated imports/seeding on later starts, including after every bottle has been consumed. Writes commit directly to PostgreSQL. Database constraints prevent duplicate slots and references to nonexistent rack slots.
+Migration records prevent repeated initialization/imports on later starts, including after every bottle has been consumed. Writes commit directly to PostgreSQL. Database constraints prevent duplicate slots and references to nonexistent rack slots.
 
 Database data persists in the Compose-managed `winevault_postgres_data` volume. `docker compose down` stops the database without removing its data. Do not add `--volumes` unless intentionally resetting it.
 
@@ -240,3 +240,60 @@ To relocate a bottle, open it from Wine Collection or a rack, choose **Move bott
 
 Choose **History** in the sidebar to see dated additions and enjoyed bottles, filter by activity, and load older entries. Each bottle keeps a snapshot of its wine details and shelf address even after it is enjoyed or its shelf changes. Restart the backend to apply migration 005 and enable tracking. Earlier additions and removals were not recorded and cannot be reconstructed; existing inventory is not assigned invented addition dates. Batch history commits with the bottles, so failed additions do not create history entries.
 
+
+## Collection tools and drinking windows
+
+The collection supports type, rack, region, and drinking-window filters, sorting by name/vintage/window end, and **Group matching wines**. Grouping combines the currently filtered bottles by normalized name, region, type, and vintage. Open a group to select an individual bottle in **Find this wine**.
+
+Open a bottle and choose **Edit bottle details** to correct its name, vintage (`0` for NV), region, or type. Its ID, barcode, and slot are preserved. Changing wine identity re-links catalogue information; vintage changes continue using the general catalogue information. Revision checks reject stale corrections rather than overwriting newer edits or moves.
+
+In **Your drinking window**, enter start and end years. These are your own choices, shared by all matching bottles of that wine and vintage. Clear both fields to remove the window. The collection displays **Hold**, **Ready**, **Past your window**, or **Unknown**; **Drink next** and the notification bell open bottles that are ready or past the chosen window, sorted by ending year. These are in-app reminders, with no email or push notifications and no automatic maturity estimates.
+
+**Mark as enjoyed** offers **Undo**, opening recovery in History. Choose a bottle, rack, and free slot, then **Restore bottle**. Recovery preserves the original bottle ID, barcode, and details and adds a **Restored** history entry. Occupied or removed slots are rejected without losing the recoverable record. Recovery is available only for bottles enjoyed after migration 010; previously deleted details cannot be reconstructed completely.
+
+Migration 010 runs automatically when the backend restarts. Additional API endpoints:
+
+- `PUT /api/bottles/{id}`: correct details with the current bottle `revision`
+- `PUT /api/bottles/{id}/window`: save `start`, `end`, and `revision`; null years clear the shared window
+- `GET /api/enjoyed`: list recoverable bottles
+- `POST /api/bottles/{id}/restore`: restore to a chosen `rack` and `slot`
+
+Run `TEST_DATABASE_URL="$DATABASE_URL" go test ./...` from `backend/` to validate these flows in isolated schemas. Run `node tests/collection-tools.mjs` from `frontend/` against the running app for mocked browser checks of filters, grouping, corrections, windows, recovery, mobile layout, and dialog keyboard behavior. Install Playwright Chromium first with `npx playwright install chromium` if needed; set `APP_URL` to test a different frontend address. The browser suite does not modify live inventory.
+
+## View preferences and wine sections
+
+Open **Preferences** beside the sidebar profile, or **Cellar settings** in the top bar on a phone. Choose **Floor plan and rack view** to retain both views, or **Rack view only** to hide the floor plan and room controls. Save preferences; the choice persists across devices and reloads.
+
+Settings exposes the cellar view preference. The wine-type and section controls have been removed. Existing section assignments are preserved when saving view preferences. Available wine types remain Red, White, Rosé, Champagne, Sparkling, and Dessert.
+
+**Add wine**, label-photo review, and barcode review suggest free slots in the assigned shelf. Changing the wine type updates the suggestion. Batch quantities select enough free slots together when possible. If the preferred section is full or too small, another available shelf is suggested with an explanation. You can choose a different shelf or slots before saving; clicking an empty slot in a rack preserves that exact location initially. Inventory is saved only after your confirmation and still rejects concurrent slot conflicts.
+
+Removing an empty shelf clears its section assignments while retaining your preferred types. Migration 011 adds these settings and the Champagne type without reclassifying existing Sparkling bottles. `PUT /api/cellar/preferences` saves `viewMode` (`floor-plan` or `racks-only`), `typeRacks` (wine type to shelf ID, or an empty string), and the current cellar `revision`.
+
+Validation: `node --test tests/placement.test.mjs` checks placement rules; `node tests/preferences.mjs` checks saved view choices, manual/scanned placement, overrides, full-shelf fallback, and mobile settings against mocked APIs.
+
+## CSV import and export
+
+Choose **Import / export CSV** in Wine Collection or Settings. **Export collection CSV** downloads one row per bottle in the current inventory, including its purchase details and shelf address. **Download CSV template** provides the supported header. Text cells that could be interpreted as spreadsheet formulas are escaped; WineVault removes its own escape during preview. Export is an inventory transfer, not a complete database backup: it does not include enjoyed bottles, provider caches, room layouts, history, or drinking-window definitions.
+
+Upload a comma-separated UTF-8 CSV (a BOM is accepted). Required columns: `name`, `vintage` (year, `0`, or `NV`), `region`, `type`. Optional columns: `quantity` (defaults to 1), `rack` (ID or unique shelf name), `slot` (e.g. `A1`), `barcode`, `price` (per bottle, decimal with at most two places), `currency`, `purchase_date` (`YYYY-MM-DD`), `seller`. The upload limit is 2 MB, 1,000 rows, and 2,000 bottles per import. Unknown or duplicate columns and malformed records are rejected.
+
+Review and correct each row, choose its destination shelf, and inspect the assigned slots before **Confirm import**. Blank shelf/slot fields allow automatic placement; a starting slot reserves that slot and fills remaining batch bottles into other free slots. Rows reserve distinct slots across the entire import. Remove unwanted rows during review. A changed or occupied slot rejects the whole transaction; no bottles or purchase/history records from that import are committed. The review refreshes availability so you can correct placement and retry. Imports create new bottles rather than updating or deduplicating existing wines. Catalogue records are linked but external enrichment is deferred until you request wine information.
+
+## Purchase details and spending
+
+Optional **Purchase details** in manual addition and scan review record the price per bottle, currency, date, and seller. Batch bottles share those details. Open an existing bottle and choose **Edit purchase details** to add, correct, or clear them; revision checks reject stale changes.
+
+Choose **Purchases** in the sidebar, or **View purchases & spending** in Settings on mobile. The tracker shows recorded spending, purchase cost of bottles still in the cellar, spending by purchase month, and a searchable purchase list with a seller filter. Values are kept separately for CHF, EUR, USD, GBP, CAD, and AUD; no conversion or market valuation is performed. Prices use integer minor units to avoid decimal rounding during storage. Unknown prices are excluded from cost totals, and prices without a purchase date appear as undated spending rather than being assigned invented dates. Zero prices are supported.
+
+Enjoying a bottle retains its purchase record. Restoration preserves the details and does not count the purchase again. Export includes current bottles' purchase metadata; historical spending remains in the database. Migration 012 adds these fields and purchase records without inventing prices or dates for existing bottles.
+
+Additional APIs:
+
+- `GET /api/collection/export`: download current inventory as CSV
+- `POST /api/collection/import/preview`: CSV text body, returning editable rows without writes
+- `POST /api/collection/import`: reviewed `bottles` array, saved atomically
+- `PUT /api/bottles/{id}/purchase`: `priceMinor`, `currency`, `purchaseDate`, `seller`, and current bottle `revision`
+- `GET /api/purchases`: recorded purchases, including enjoyed bottles
+
+Verification: run Go integration tests with `TEST_DATABASE_URL`; run `node --test tests/purchases.test.mjs` for decimal and summary checks and `node tests/transfers-purchases.mjs` for mocked browser flow checks. CSV and purchase browser tests do not modify live inventory.
