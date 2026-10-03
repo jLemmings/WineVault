@@ -4,6 +4,59 @@ A responsive Nuxt 3 wine cellar planner with an interactive floor plan, full rac
 
 ## Run locally
 
+### Devcontainer (recommended)
+
+Install Docker with Compose and the VS Code Dev Containers extension, open this
+repository, and run **Dev Containers: Reopen in Container**. The container installs
+dependencies and starts Nuxt and the Go API automatically after PostgreSQL is
+healthy. Open http://localhost:3000 once Nuxt is ready.
+
+You can also run the same environment without VS Code:
+
+```sh
+docker compose -f .devcontainer/compose.yml up --build
+```
+
+Vue/CSS edits use Nuxt hot module replacement. Go source, embedded SQL, Go module
+files, and `backend/.env` changes trigger an API rebuild/restart through
+[Air](https://github.com/air-verse/air/tree/v1.61.7). Watchers poll for changes to
+support Docker Desktop bind mounts. SQL migrations retain their existing semantics:
+editing an already-applied migration does not rerun it.
+
+The API still loads optional provider keys from `backend/.env`. Container database
+settings take precedence over that file. Find the initial owner setup code and
+server errors with `docker compose -f .devcontainer/compose.yml logs -f app`.
+API restarts before owner setup completes generate a new setup code.
+
+Dependencies, Nuxt development files, and Go caches use Linux named volumes. After
+changing `frontend/package.json` or its lockfile, restart the app service to rerun
+`npm ci`: `docker compose -f .devcontainer/compose.yml restart app`.
+Rebuild the devcontainer after changing its Dockerfile.
+
+This setup has its own persistent PostgreSQL volume, separate from the host-run
+development database, and only publishes port 3000. Stop it with
+`docker compose -f .devcontainer/compose.yml down`; data survives unless you add
+`--volumes`. Stop any other frontend using port 3000 first.
+
+Run checks from the container terminal:
+
+```sh
+cd /workspaces/WineVault/backend
+TEST_DATABASE_URL="$DATABASE_URL" go test ./...
+go vet ./...
+```
+
+To check the production build, stop the development servers first so they do not
+share Nuxt's generated files with the build:
+
+```sh
+docker compose -f .devcontainer/compose.yml stop app
+docker compose -f .devcontainer/compose.yml run --rm --no-deps app npm --prefix frontend run build
+docker compose -f .devcontainer/compose.yml up -d app
+```
+
+### Host tools
+
 ## Project layout
 
 ```text

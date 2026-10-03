@@ -1,0 +1,21 @@
+root = "."
+tmp_dir = ".cache/air"
+
+[build]
+cmd = "go build -o ./.cache/air/winevault ."
+bin = ".cache/air/winevault"
+include_ext = ["go", "sql", "mod", "sum", "env"]
+include_file = [".env"]
+exclude_dir = [".cache", "data", "vendor"]
+delay = 500
+poll = true
+poll_interval = 500
+stop_on_error = true
+send_interrupt = true
+kill_delay = "2s"
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true
