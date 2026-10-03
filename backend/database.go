@@ -13,8 +13,8 @@ import (
 //go:embed migrations/001_initial.sql
 var initialSchema string
 
-//go:embed migrations/seed.sql
-var initialSeed string
+//go:embed migrations/legacy_layout.sql
+var legacyLayout string
 
 //go:embed migrations/002_editors.sql
 var editorSchema string
@@ -40,7 +40,16 @@ var informationSearchSchema string
 //go:embed migrations/009_shared_wine_information.sql
 var sharedInformationSchema string
 
-// Schema, seed/import, and migration marker commit together exactly once.
+//go:embed migrations/010_collection_tools.sql
+var collectionToolsSchema string
+
+//go:embed migrations/011_preferences.sql
+var preferencesSchema string
+
+//go:embed migrations/012_purchases.sql
+var purchaseSchema string
+
+// Schema, optional legacy import, and migration marker commit together exactly once.
 func migrate(ctx context.Context, pool *pgxpool.Pool, legacyPath string) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -58,7 +67,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, legacyPath string) error {
 		return err
 	}
 	if applied {
-		return migrateEditors(ctx, tx)
+		return migrateEditors(ctx, tx, false)
 	}
 	if _, err = tx.Exec(ctx, initialSchema); err != nil {
 		return err
@@ -70,11 +79,16 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, legacyPath string) error {
 		err = os.ErrNotExist
 	}
 	if os.IsNotExist(err) {
-		_, err = tx.Exec(ctx, initialSeed)
+		err = nil
 	} else if err == nil {
 		var bottles []Bottle
 		if err = json.Unmarshal(data, &bottles); err != nil {
 			return fmt.Errorf("read legacy inventory: %w", err)
+		}
+		if len(bottles) > 0 {
+			if _, err = tx.Exec(ctx, "DELETE FROM cellars;"+legacyLayout); err != nil {
+				return err
+			}
 		}
 		for _, b := range bottles {
 			if !validBottle(b) {
@@ -91,10 +105,10 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, legacyPath string) error {
 	if _, err = tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(1)"); err != nil {
 		return err
 	}
-	return migrateEditors(ctx, tx)
+	return migrateEditors(ctx, tx, true)
 }
 
-func migrateEditors(ctx context.Context, tx pgx.Tx) error {
+func migrateEditors(ctx context.Context, tx pgx.Tx, fresh bool) error {
 	var applied bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=2)").Scan(&applied); err != nil {
 		return err
@@ -181,6 +195,44 @@ func migrateEditors(ctx context.Context, tx pgx.Tx) error {
 			return err
 		}
 		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(9)"); err != nil {
+			return err
+		}
+	}
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=10)").Scan(&applied); err != nil {
+		return err
+	}
+	if !applied {
+		if _, err := tx.Exec(ctx, collectionToolsSchema); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(10)"); err != nil {
+			return err
+		}
+	}
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=11)").Scan(&applied); err != nil {
+		return err
+	}
+	if !applied {
+		if _, err := tx.Exec(ctx, preferencesSchema); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(11)"); err != nil {
+			return err
+		}
+	}
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=12)").Scan(&applied); err != nil {
+		return err
+	}
+	if !applied {
+		if _, err := tx.Exec(ctx, purchaseSchema); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES(12)"); err != nil {
+			return err
+		}
+	}
+	if fresh {
+		if _, err := tx.Exec(ctx, `UPDATE cellars SET layout=jsonb_set(layout,'{tableEnabled}','false') WHERE NOT EXISTS(SELECT 1 FROM racks)`); err != nil {
 			return err
 		}
 	}

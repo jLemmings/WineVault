@@ -1,24 +1,30 @@
 <script setup>
 import { Camera, Upload, ScanLine, X, ArrowRight, ArrowLeft, Wine, Check, LoaderCircle, AlertCircle, Sparkles, Grid2X2, Barcode } from 'lucide-vue-next'
+import { purchasePayload } from '~/utils/purchases'
+import { preferredWineTypes, suggestPlacement } from '~/utils/placement'
 import { prepareWinePhoto } from '~/utils/prepareWinePhoto'
 const props=defineProps({cellar:{type:Object,required:true},preferredRack:{type:String,default:''}}),emit=defineEmits(['close','saved'])
-const mode=ref('label')
+const mode=ref('label'),autoPlacement=ref(true),placementHint=ref('')
+const entryTypes=computed(()=>preferredWineTypes(inventory.value.preferences))
 const root=ref(null),cameraInput=ref(null),uploadInput=ref(null),preview=ref(''),photo=ref(null),filename=ref(''),stage=ref('photo'),preparing=ref(false),analyzing=ref(false),saving=ref(false),error=ref(''),result=ref(null),service=ref(null),statusLoading=ref(false),dragging=ref(false)
 const inventory=ref(props.cellar)
 const count=id=>inventory.value.bottles.filter(b=>b.rack===id).length
 const availableRacks=computed(()=>inventory.value.racks.filter(r=>count(r.id)<r.capacity))
 const initialRack=availableRacks.value.find(r=>r.id===props.preferredRack)?.id??availableRacks.value[0]?.id??''
-const form=reactive({name:'',vintage:'',nonVintage:false,region:'',type:'',rack:initialRack,quantity:1,slots:[],barcode:''})
+const form=reactive({name:'',vintage:'',nonVintage:false,region:'',type:'',rack:initialRack,quantity:1,slots:[],barcode:'',price:'',currency:'CHF',purchaseDate:'',seller:''})
 const selectedRack=computed(()=>inventory.value.racks.find(r=>r.id===form.rack))
 const freeSlots=computed(()=>selectedRack.value?Array.from({length:selectedRack.value.capacity},(_,i)=>i).filter(slot=>!inventory.value.bottles.some(b=>b.rack===form.rack&&b.slot===slot)):[])
 const slotLabel=slot=>`${String.fromCharCode(65+slot%(selectedRack.value?.columns||6))}${Math.floor(slot/(selectedRack.value?.columns||6))+1}`
 const usable=computed(()=>form.name.trim()&&form.region.trim()&&form.type&&form.rack&&Number.isInteger(form.quantity)&&form.quantity>0&&form.quantity<=freeSlots.value.length&&form.slots.length===form.quantity&&form.slots.every(slot=>freeSlots.value.includes(slot))&&(form.nonVintage||(Number.isInteger(Number(form.vintage))&&Number(form.vintage)>=1900&&Number(form.vintage)<=new Date().getFullYear()+1)))
 const resultMessage=computed(()=>({unreadable:'We couldn’t read this label clearly. Try a closer photo with less glare.',not_wine:'We couldn’t find a wine label in this photo. Photograph the front label of one bottle.',multiple:'There’s more than one wine in this photo. Take a photo of just one label.'})[result.value?.status]||'')
 let controller=null,photoVersion=0
-watch(()=>form.rack,()=>{form.slots=[]})
+watch(()=>form.rack,()=>{form.slots=[]},{flush:'sync'})
+watch(()=>form.type,()=>{autoPlacement.value=true;applyPlacement()})
 watch(freeSlots,()=>{form.slots=form.slots.filter(slot=>freeSlots.value.includes(slot))})
-watch(()=>form.quantity,()=>{form.slots=form.slots.slice(0,Math.max(0,Number(form.quantity)||0))})
-function toggleSlot(slot){if(form.slots.includes(slot))form.slots=form.slots.filter(s=>s!==slot);else if(form.slots.length<form.quantity)form.slots.push(slot)}
+watch(()=>form.quantity,()=>{if(autoPlacement.value)applyPlacement();else form.slots=form.slots.slice(0,Math.max(0,Number(form.quantity)||0))})
+function toggleSlot(slot){autoPlacement.value=false;placementHint.value='';if(form.slots.includes(slot))form.slots=form.slots.filter(s=>s!==slot);else if(form.slots.length<form.quantity)form.slots.push(slot)}
+function applyPlacement(){const suggestion=suggestPlacement({racks:inventory.value.racks,bottles:inventory.value.bottles,preferences:inventory.value.preferences,type:form.type,quantity:form.quantity,fallbackRack:form.rack});form.rack=suggestion.rack;form.slots=suggestion.slots;placementHint.value=suggestion.message}
+function chooseRack(){autoPlacement.value=false;form.slots=freeSlots.value.slice(0,form.quantity);placementHint.value=''}
 function close(){if(saving.value)return;controller?.abort();emit('close')}
 useEditorDialog(root,close)
 onMounted(loadStatus)
@@ -47,7 +53,7 @@ async function save(){
  try{
   inventory.value=await $fetch('/api/cellar')
   if(form.slots.length!==form.quantity||!form.slots.every(slot=>freeSlots.value.includes(slot)))throw new Error('A selected slot is no longer available. Review your selection below.')
-  await $fetch('/api/bottles/batch',{method:'POST',body:{bottle:{name:form.name.trim(),vintage:form.nonVintage?0:Number(form.vintage),region:form.region.trim(),type:form.type,rack:form.rack,barcode:form.barcode},slots:form.slots},retry:0})
+  await $fetch('/api/bottles/batch',{method:'POST',body:{bottle:{name:form.name.trim(),vintage:form.nonVintage?0:Number(form.vintage),region:form.region.trim(),type:form.type,rack:form.rack,barcode:form.barcode,...purchasePayload(form)},slots:form.slots},retry:0})
   emit('saved')
  }catch(e){error.value=typeof e.data==='string'?e.data:e.message||'Could not save this wine. Please try again.';if(e.status===409||e.statusCode===409){try{inventory.value=await $fetch('/api/cellar')}catch{}}}finally{saving.value=false}
 }
@@ -75,13 +81,13 @@ async function save(){
     <div v-if="error" class="scanner-error" role="alert">{{error}}</div>
     <p class="scanner-format-note">JPEG, PNG & WebP · Up to 20 MB<br>Phone photos are resized automatically.</p>
    </div>
-   <form v-if="stage==='review'" id="scanner-review-form" class="scanner-review" @submit.prevent="save"><fieldset :disabled="saving"><div class="recognition-heading"><span class="little-label">{{result?(mode==='barcode'?'SUGGESTED FROM BARCODE':'SUGGESTED FROM YOUR LABEL'):'WINE DETAILS'}}</span><span v-if="result" :class="['confidence-tag',result.confidence]"><Sparkles :size="12"/>{{result.confidence==='high'?'Suggested match':result.confidence==='medium'?'Check the details':'Uncertain match'}}</span></div><h3>{{result?'Does this look right?':'Tell us about your wine.'}}</h3><p class="review-explanation">{{result?'Suggested matches can be wrong. Check and edit every field.':'Fill in the details from the bottle label.'}}</p><p v-if="result?.notes" class="recognition-notes">{{result.notes}}</p>
-    <label>Wine name<input v-model="form.name" required maxlength="150" placeholder="Producer & wine name" autocomplete="off"/></label><div class="scanner-field-row"><label>Vintage<input v-model="form.vintage" :disabled="form.nonVintage" type="number" :required="!form.nonVintage" min="1900" :max="new Date().getFullYear()+1" placeholder="Year on label"/></label><label>Wine type<select v-model="form.type" required><option disabled value="">Choose type</option><option>Red</option><option>White</option><option>Rosé</option><option>Sparkling</option><option>Dessert</option></select></label></div><label class="scanner-checkbox"><input v-model="form.nonVintage" type="checkbox"/>This is a non-vintage wine (NV)</label><label>Region<input v-model="form.region" required maxlength="200" placeholder="e.g. Bordeaux, France"/></label>
-    <div class="scanner-storage-title"><Grid2X2 :size="15"/><span>A place in your cellar</span></div>
+   <form v-if="stage==='review'" id="scanner-review-form" class="scanner-review" @submit.prevent="save"><fieldset :disabled="saving"><div class="recognition-heading"><span class="little-label">{{result?(mode==='barcode'?'SUGGESTED FROM BARCODE':'SUGGESTED FROM YOUR LABEL'):'WINE DETAILS'}}</span><span v-if="result" :class="['confidence-tag',result.confidence]"><Sparkles :size="12"/>{{result.confidence==='high'?'Suggested match':result.confidence==='medium'?'Check the details':'Uncertain match'}}</span></div><h3>{{result?'Does this look right?':'Tell us about your wine.'}}</h3><p v-if="placementHint" class="review-explanation" role="status">{{placementHint}}</p><p class="review-explanation">{{result?'Suggested matches can be wrong. Check and edit every field.':'Fill in the details from the bottle label.'}}</p><p v-if="result?.notes" class="recognition-notes">{{result.notes}}</p>
+    <label>Wine name<input v-model="form.name" required maxlength="150" placeholder="Producer & wine name" autocomplete="off"/></label><div class="scanner-field-row"><label>Vintage<input v-model="form.vintage" :disabled="form.nonVintage" type="number" :required="!form.nonVintage" min="1900" :max="new Date().getFullYear()+1" placeholder="Year on label"/></label><label>Wine type<select v-model="form.type" required><option disabled value="">Choose type</option><option v-for="type in entryTypes" :key="type">{{type}}</option></select></label></div><label class="scanner-checkbox"><input v-model="form.nonVintage" type="checkbox"/>This is a non-vintage wine (NV)</label><label>Region<input v-model="form.region" required maxlength="200" placeholder="e.g. Bordeaux, France"/></label>
+    <PurchaseFields :draft="form"/><div class="scanner-storage-title"><Grid2X2 :size="15"/><span>A place in your cellar</span></div>
     <div v-if="!availableRacks.length" class="scanner-error" role="status">Your shelves are full. Add a shelf or free a slot, then try again.</div>
-    <div class="scanner-field-row"><label>Shelf<select v-model="form.rack" required><option value="" disabled>Choose a shelf</option><option v-for="r in inventory.racks" :key="r.id" :value="r.id" :disabled="count(r.id)>=r.capacity">{{r.id}} · {{r.short}} ({{r.capacity-count(r.id)}} free)</option></select></label><label>Number of bottles<input v-model.number="form.quantity" type="number" min="1" :max="freeSlots.length" step="1" required/></label></div>
+    <div class="scanner-field-row"><label>Shelf<select v-model="form.rack" required @change="chooseRack"><option value="" disabled>Choose a shelf</option><option v-for="r in inventory.racks" :key="r.id" :value="r.id" :disabled="count(r.id)>=r.capacity">{{r.id}} · {{r.short}} ({{r.capacity-count(r.id)}} free)</option></select></label><label>Number of bottles<input v-model.number="form.quantity" type="number" min="1" :max="freeSlots.length" step="1" required/></label></div>
     <p v-if="form.quantity>freeSlots.length" class="scanner-error" role="alert">This shelf does not have enough free slots for that quantity.</p>
-    <div class="scanner-slot-heading"><span aria-live="polite">{{form.slots.length}} of {{form.quantity || 0}} slots selected</span><button type="button" class="text-button" :disabled="!Number.isInteger(form.quantity)||form.quantity<1||form.quantity>freeSlots.length" @click="form.slots=freeSlots.slice(0,form.quantity)">Select first available</button></div>
+    <div class="scanner-slot-heading"><span aria-live="polite">{{form.slots.length}} of {{form.quantity || 0}} slots selected</span><button type="button" class="text-button" :disabled="!Number.isInteger(form.quantity)||form.quantity<1||form.quantity>freeSlots.length" @click="autoPlacement=false;form.slots=freeSlots.slice(0,form.quantity);placementHint=''">Select first available</button></div>
     <p class="review-explanation">Select each slot where you placed a bottle.</p>
     <div class="scanner-slots-scroll"><div class="scanner-slots" :style="{'--slot-columns':selectedRack?.columns||6}" role="group" aria-label="Bottle slots">
      <button v-for="n in selectedRack?.capacity||0" :key="n" type="button" :aria-label="'Slot '+slotLabel(n-1)+(!freeSlots.includes(n-1)?' occupied':'')" :aria-pressed="form.slots.includes(n-1)" :disabled="!freeSlots.includes(n-1)||(!form.slots.includes(n-1)&&form.slots.length>=form.quantity)" :class="{chosen:form.slots.includes(n-1),occupied:!freeSlots.includes(n-1)}" @click="toggleSlot(n-1)">{{slotLabel(n-1)}}<Check v-if="form.slots.includes(n-1)" :size="13"/></button>

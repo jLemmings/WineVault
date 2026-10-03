@@ -24,7 +24,7 @@ type HistoryEntry struct {
 
 func (s *Store) history(w http.ResponseWriter, r *http.Request) {
 	action := r.URL.Query().Get("action")
-	if action != "" && action != "added" && action != "enjoyed" {
+	if action != "" && action != "added" && action != "enjoyed" && action != "restored" {
 		http.Error(w, "Invalid history filter", 400)
 		return
 	}

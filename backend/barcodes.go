@@ -164,6 +164,8 @@ func (lookup *BarcodeLookup) lookup(ctx context.Context, code string) (BarcodeMa
 	result.Region = limitText(strings.TrimSpace(p.Origins), 200)
 	result.Confidence = "medium"
 	switch {
+	case strings.Contains(categories, "champagne"):
+		result.Type = "Champagne"
 	case strings.Contains(categories, "sparkling") || strings.Contains(categories, "champagne") || strings.Contains(categories, "mousseux"):
 		result.Type = "Sparkling"
 	case strings.Contains(categories, "red-wine") || strings.Contains(categories, "red wine") || strings.Contains(categories, "rouge"):

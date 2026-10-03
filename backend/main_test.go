@@ -58,7 +58,7 @@ func call(s *Store, method, url, body string) *httptest.ResponseRecorder {
 func TestDatabaseLifecycle(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}
@@ -137,7 +137,7 @@ func TestDatabaseLifecycle(t *testing.T) {
 	if _, err := pool.Exec(ctx, "DELETE FROM bottles"); err != nil {
 		t.Fatal(err)
 	}
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	w = call(s, "GET", "/api/bottles", "")
@@ -152,7 +152,7 @@ func TestLegacyImport(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := migrate(context.Background(), pool, path); err != nil {
+	if err := migrateFixture(context.Background(), pool, path); err != nil {
 		t.Fatal(err)
 	}
 	w := call(&Store{db: pool}, "GET", "/api/bottles", "")
@@ -170,7 +170,7 @@ func TestInvalidLegacyImportRollsBack(t *testing.T) {
 	pool := testPool(t)
 	path := filepath.Join(t.TempDir(), "bottles.json")
 	os.WriteFile(path, []byte(`[{"name":"bad"}]`), 0600)
-	if err := migrate(context.Background(), pool, path); err == nil {
+	if err := migrateFixture(context.Background(), pool, path); err == nil {
 		t.Fatal("invalid legacy inventory accepted")
 	}
 	var table *string

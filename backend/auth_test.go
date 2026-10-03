@@ -25,7 +25,7 @@ func authCall(handler http.Handler, method, path, body string, cookie *http.Cook
 func TestOwnerAuthenticationLifecycle(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	a := &authService{db: pool, setupToken: "setup-test-token", secure: true}
@@ -136,7 +136,7 @@ func TestAuthRateLimitAndExpiry(t *testing.T) {
 	}
 	pool := testPool(t)
 	ctx := context.Background()
-	if err := migrate(ctx, pool, ""); err != nil {
+	if err := migrateFixture(ctx, pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, "INSERT INTO owner_account VALUES(1,'owner','unused',now())"); err != nil {

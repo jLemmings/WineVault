@@ -60,7 +60,7 @@ func TestBarcodeNotFoundAndUnrelatedProduct(t *testing.T) {
 }
 func TestBarcodeStoredAndReusedWithoutProvider(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}

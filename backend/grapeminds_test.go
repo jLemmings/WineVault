@@ -27,7 +27,7 @@ func testWineInfo(t *testing.T, s *Store, id string) wineInfo {
 }
 func TestGrapeMindsFetchPersistenceAndRequestBudget(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	var calls atomic.Int32
@@ -95,7 +95,7 @@ func TestGrapeMindsFetchPersistenceAndRequestBudget(t *testing.T) {
 
 func TestGrapeMindsAmbiguityUsesCachedSearch(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	var calls atomic.Int32
@@ -137,7 +137,7 @@ func TestGrapeMindsAmbiguityUsesCachedSearch(t *testing.T) {
 
 func TestGrapeMindsMissingKeyKeepsBottleAndExistingInventoryRetryable(t *testing.T) {
 	pool := testPool(t)
-	if err := migrate(context.Background(), pool, ""); err != nil {
+	if err := migrateFixture(context.Background(), pool, ""); err != nil {
 		t.Fatal(err)
 	}
 	s := &Store{db: pool}

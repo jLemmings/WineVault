@@ -18,6 +18,10 @@ import (
 )
 
 type Bottle struct {
+	PurchaseData
+	Revision          int    `json:"revision"`
+	DrinkStart        *int   `json:"drinkStart"`
+	DrinkEnd          *int   `json:"drinkEnd"`
 	ID                string `json:"id"`
 	Name              string `json:"name"`
 	Vintage           int    `json:"vintage"`
@@ -47,16 +51,17 @@ type Rack struct {
 	Rotation int     `json:"rotation"`
 }
 type Cellar struct {
-	ID       string     `json:"id"`
-	Name     string     `json:"name"`
-	Owner    string     `json:"owner"`
-	Room     string     `json:"room"`
-	Width    float64    `json:"width"`
-	Depth    float64    `json:"depth"`
-	Revision int        `json:"revision"`
-	Layout   RoomLayout `json:"layout"`
-	Racks    []Rack     `json:"racks"`
-	Bottles  []Bottle   `json:"bottles"`
+	Preferences CellarPreferences `json:"preferences"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Owner       string            `json:"owner"`
+	Room        string            `json:"room"`
+	Width       float64           `json:"width"`
+	Depth       float64           `json:"depth"`
+	Revision    int               `json:"revision"`
+	Layout      RoomLayout        `json:"layout"`
+	Racks       []Rack            `json:"racks"`
+	Bottles     []Bottle          `json:"bottles"`
 }
 type Store struct {
 	db            *pgxpool.Pool
@@ -86,7 +91,7 @@ func (s *Store) cellar(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 	c := Cellar{Racks: []Rack{}, Bottles: []Bottle{}}
-	err = tx.QueryRow(ctx, "SELECT id,name,owner_name,room_name,width_m,depth_m,revision,layout FROM cellars ORDER BY id LIMIT 1").Scan(&c.ID, &c.Name, &c.Owner, &c.Room, &c.Width, &c.Depth, &c.Revision, &c.Layout)
+	err = tx.QueryRow(ctx, "SELECT id,name,owner_name,room_name,width_m,depth_m,revision,layout,preferences FROM cellars ORDER BY id LIMIT 1").Scan(&c.ID, &c.Name, &c.Owner, &c.Room, &c.Width, &c.Depth, &c.Revision, &c.Layout, &c.Preferences)
 	if err != nil {
 		databaseError(w, err)
 		return
@@ -128,7 +133,7 @@ type querier interface {
 }
 
 func queryBottles(ctx context.Context, db querier, cellarID string) ([]Bottle, error) {
-	rows, err := db.Query(ctx, `SELECT b.id::text,b.name,b.vintage,b.region,b.wine_type,b.rack_id,b.slot,b.barcode,COALESCE(i.status,'not_fetched'),COALESCE(i.payload IS NOT NULL AND i.fetched_at IS NOT NULL,false) FROM bottles b JOIN racks r ON r.id=b.rack_id LEFT JOIN wine_information i ON i.id=b.information_id WHERE ($1='' OR r.cellar_id=$1) ORDER BY r.position,b.slot`, cellarID)
+	rows, err := db.Query(ctx, `SELECT b.id::text,b.name,b.vintage,b.region,b.wine_type,b.rack_id,b.slot,b.barcode,COALESCE(i.status,'not_fetched'),COALESCE(i.payload IS NOT NULL AND i.fetched_at IS NOT NULL,false),b.revision,d.start_year,d.end_year,b.price_minor,b.currency,COALESCE(b.purchased_on::text,''),b.seller FROM bottles b JOIN racks r ON r.id=b.rack_id LEFT JOIN wine_information i ON i.id=b.information_id LEFT JOIN drinking_windows d ON d.wine_key=bottle_wine_key(b.name,b.region,b.wine_type) AND d.vintage=b.vintage WHERE ($1='' OR r.cellar_id=$1) ORDER BY r.position,b.slot`, cellarID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +141,7 @@ func queryBottles(ctx context.Context, db querier, cellarID string) ([]Bottle, e
 	result := []Bottle{}
 	for rows.Next() {
 		var b Bottle
-		if err = rows.Scan(&b.ID, &b.Name, &b.Vintage, &b.Region, &b.Type, &b.Rack, &b.Slot, &b.Barcode, &b.InformationStatus, &b.HasInformation); err != nil {
+		if err = rows.Scan(&b.ID, &b.Name, &b.Vintage, &b.Region, &b.Type, &b.Rack, &b.Slot, &b.Barcode, &b.InformationStatus, &b.HasInformation, &b.Revision, &b.DrinkStart, &b.DrinkEnd, &b.PriceMinor, &b.Currency, &b.PurchaseDate, &b.Seller); err != nil {
 			return nil, err
 		}
 		result = append(result, b)
@@ -144,7 +149,7 @@ func queryBottles(ctx context.Context, db querier, cellarID string) ([]Bottle, e
 	return result, rows.Err()
 }
 func validBottle(b Bottle) bool {
-	validType := b.Type == "Red" || b.Type == "White" || b.Type == "Rosé" || b.Type == "Sparkling" || b.Type == "Dessert"
+	validType := b.Type == "Red" || b.Type == "White" || b.Type == "Rosé" || b.Type == "Champagne" || b.Type == "Sparkling" || b.Type == "Dessert"
 	return len(b.Name) > 0 && len(b.Name) <= 150 && len(b.Region) > 0 && len(b.Region) <= 200 && (b.Vintage == 0 || (b.Vintage >= 1900 && b.Vintage <= time.Now().Year()+1)) && b.Slot >= 0 && b.Rack != "" && validType
 }
 func (s *Store) bottles(w http.ResponseWriter, r *http.Request) {
@@ -175,11 +180,11 @@ func (s *Store) bottles(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if !validBottle(b) {
+		if !validBottle(b) || validatePurchase(&b.PurchaseData) != nil {
 			http.Error(w, "Invalid bottle details", 400)
 			return
 		}
-		err := s.db.QueryRow(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot,barcode) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode).Scan(&b.ID)
+		err := s.db.QueryRow(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot,barcode,price_minor,currency,purchased_on,seller) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,'')::date,$11) RETURNING id::text`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller).Scan(&b.ID)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
@@ -222,16 +227,26 @@ func (s *Store) dataRoutes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/cellar", s.cellar)
 	mux.HandleFunc("GET /api/history", s.history)
+	mux.HandleFunc("GET /api/collection/export", s.exportCSV)
+	mux.HandleFunc("POST /api/collection/import/preview", s.previewCSV)
+	mux.HandleFunc("POST /api/collection/import", s.importCSV)
+	mux.HandleFunc("GET /api/purchases", s.purchaseHistory)
+	mux.HandleFunc("PUT /api/bottles/{id}/purchase", s.updatePurchase)
 	mux.HandleFunc("GET /api/wine-scan/status", s.scanStatus)
 	mux.HandleFunc("POST /api/wine-scan", s.scanWine)
 	mux.HandleFunc("GET /api/barcodes/{code}", s.lookupBarcode)
 	mux.HandleFunc("PUT /api/cellar/layout", s.updateLayout)
+	mux.HandleFunc("PUT /api/cellar/preferences", s.updatePreferences)
 	mux.HandleFunc("PUT /api/racks/{id}", s.updateRack)
 	mux.HandleFunc("POST /api/racks", s.createRack)
 	mux.HandleFunc("DELETE /api/racks/{id}", s.deleteRack)
 	mux.HandleFunc("/api/bottles", s.bottles)
 	mux.HandleFunc("POST /api/bottles/batch", s.addBottleBatch)
 	mux.HandleFunc("PUT /api/bottles/{id}/location", s.moveBottle)
+	mux.HandleFunc("PUT /api/bottles/{id}", s.editBottle)
+	mux.HandleFunc("PUT /api/bottles/{id}/window", s.drinkingWindow)
+	mux.HandleFunc("POST /api/bottles/{id}/restore", s.restoreBottle)
+	mux.HandleFunc("GET /api/enjoyed", s.enjoyedBottles)
 	mux.HandleFunc("GET /api/bottles/{id}/information", s.wineInformation)
 	mux.HandleFunc("POST /api/bottles/{id}/information", s.retryWineInformation)
 	mux.HandleFunc("POST /api/bottles/{id}/information/search", s.searchWineInformation)

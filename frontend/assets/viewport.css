@@ -41,3 +41,8 @@
  .wine-table { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
  .history-panel { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
 }
+@media(min-width:981px) {
+ .history-workspace { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+ .history-workspace .history-panel { overflow:visible; }
+}
+@media(min-width:981px){.purchase-tracker{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}}
