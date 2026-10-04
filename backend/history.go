@@ -39,7 +39,30 @@ func (s *Store) history(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	rows, err := s.db.Query(ctx, `SELECT id::text,action,occurred_at,bottle_id::text,name,vintage,region,wine_type,rack_id,rack_name,slot,columns FROM wine_history WHERE ($1='' OR action=$1) AND ($2::bigint=0 OR id<$2) ORDER BY id DESC LIMIT 51`, action, before)
+	rows, err := s.db.Query(ctx, `
+		SELECT
+		    id::text,
+		    action,
+		    occurred_at,
+		    bottle_id::text,
+		    name,
+		    vintage,
+		    region,
+		    wine_type,
+		    rack_id,
+		    rack_name,
+		    slot,
+		    columns
+		FROM
+		    wine_history
+		WHERE ($1 = ''
+		    OR action = $1)
+		AND ($2::bigint = 0
+		    OR id < $2)
+		ORDER BY
+		    id DESC
+		LIMIT 51
+	`, action, before)
 	if err != nil {
 		databaseError(w, err)
 		return

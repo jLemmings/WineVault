@@ -1,48 +1,353 @@
 /* Keep the footer visible while long lists scroll inside the desktop workspace. */
 .app-footer {
- position:fixed;
- inset:auto 0 0;
- height:42px;
- padding:0 16px;
- align-items:center;
- background:var(--cream);
- border-top:1px solid var(--line);
- z-index:30;
+  position: fixed;
+  inset: auto 0 0;
+  height: 42px;
+  padding: 0 16px;
+  align-items: center;
+  background: var(--cream);
+  border-top: 1px solid var(--line);
+  z-index: 30;
 }
-.main-shell>main { padding-bottom:66px; }
+.main-shell > main {
+  padding-bottom: 66px;
+}
 
-@media(min-width:981px) {
- .app-shell { height:100dvh; overflow:hidden; }
- .sidebar { bottom:42px; overflow-y:auto; }
- .main-shell { height:100%; display:flex; flex-direction:column; padding-bottom:42px; min-width:0; }
- .topbar { height:60px; flex-shrink:0; }
- .main-shell>main {
-  width:100%; min-height:0; flex:1; display:flex; flex-direction:column;
-  padding:20px 28px 16px; overflow:hidden;
- }
- .page-heading { flex-shrink:0; margin-bottom:16px; }
- .page-heading h1 { font-size:clamp(26px,2vw,34px); margin:8px 0; }
- .stats { flex-shrink:0; margin-bottom:16px; gap:16px; }
- .stat { min-height:76px; padding:12px 18px; }
- .cellar-panel { flex:1; min-height:0; display:flex; flex-direction:column; }
- .cellar-toolbar { padding:14px 22px; flex-shrink:0; }
- .view-toolbar { padding:10px 22px; flex-shrink:0; }
- .planner-layout { flex:1; min-height:0; overflow:hidden; }
- .plan-section { min-height:0; min-width:0; display:flex; flex-direction:column; padding:16px 20px; }
- .plan-caption,.plan-legend { flex-shrink:0; }
- .app-shell .floor-plan.scalable-plan { flex:1; min-height:0; height:0!important; padding:8px!important; }
- .app-shell .scalable-plan .cellar-canvas { width:100%; height:100%; max-height:100%; }
- .rack-detail { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:16px 20px; }
- .rack-detail .mini-rack { margin-top:14px; }
- .cellar-footer { flex-shrink:0; padding:12px 22px; }
- .racks-view { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
- .collection { flex:1; min-height:0; display:flex; flex-direction:column; padding:20px; }
- .collection-toolbar { flex-shrink:0; }
- .wine-table { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
- .history-panel { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+@media (min-width: 981px) {
+  .app-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .sidebar {
+    bottom: 42px;
+    overflow-y: auto;
+  }
+  .main-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 42px;
+    min-width: 0;
+  }
+  .topbar {
+    height: 60px;
+    flex-shrink: 0;
+  }
+  .main-shell > main {
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 28px 16px;
+    overflow: hidden;
+  }
+  .page-heading {
+    flex-shrink: 0;
+    margin-bottom: 16px;
+  }
+  .page-heading h1 {
+    font-size: clamp(26px, 2vw, 34px);
+    margin: 8px 0;
+  }
+  .stats {
+    flex-shrink: 0;
+    margin-bottom: 16px;
+    gap: 16px;
+  }
+  .stat {
+    min-height: 76px;
+    padding: 12px 18px;
+  }
+  .cellar-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .cellar-toolbar {
+    padding: 14px 22px;
+    flex-shrink: 0;
+  }
+  .view-toolbar {
+    padding: 10px 22px;
+    flex-shrink: 0;
+  }
+  .planner-layout {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .plan-section {
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px;
+  }
+  .plan-caption,
+  .plan-legend {
+    flex-shrink: 0;
+  }
+  .app-shell .floor-plan.scalable-plan {
+    flex: 1;
+    min-height: 0;
+    height: 0 !important;
+    padding: 8px !important;
+  }
+  .app-shell .scalable-plan .cellar-canvas {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+  }
+  .rack-detail {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px 20px;
+  }
+  .rack-detail .mini-rack {
+    margin-top: 14px;
+  }
+  .cellar-footer {
+    flex-shrink: 0;
+    padding: 12px 22px;
+  }
+  .racks-view {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .collection {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+  }
+  .collection-toolbar {
+    flex-shrink: 0;
+  }
+  .wine-table {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .history-panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
-@media(min-width:981px) {
- .history-workspace { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
- .history-workspace .history-panel { overflow:visible; }
+@media (min-width: 981px) {
+  .history-workspace {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .history-workspace .history-panel {
+    overflow: visible;
+  }
 }
-@media(min-width:981px){.purchase-tracker{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}}
+@media (min-width: 981px) {
+  .purchase-tracker {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Phone navigation stays within thumb reach, with the profile in the header. */
+.mobile-nav-label {
+  display: none;
+}
+@media (max-width: 680px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    height: 64px;
+    padding-right: 76px;
+    z-index: 35;
+  }
+  .sidebar nav {
+    position: fixed;
+    inset: auto 0 calc(42px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0;
+    padding: 7px 10px;
+    background: #fff;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 16px #302d2c08;
+  }
+  .sidebar nav button {
+    flex-direction: column;
+    width: 100%;
+    min-height: 54px;
+    height: auto;
+    padding: 7px 3px;
+    gap: 5px;
+    border-radius: 9px;
+    font-size: 11px;
+    color: #756b62;
+  }
+  .sidebar nav button.current {
+    color: var(--wine);
+    background: #f4e8ed;
+  }
+  .sidebar nav button .nav-label {
+    display: none;
+  }
+  .sidebar nav button .mobile-nav-label {
+    display: block;
+  }
+  .topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 64px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+    z-index: 40;
+  }
+  .topbar .breadcrumb,
+  .topbar .today {
+    display: none;
+  }
+  .topbar .profile-trigger {
+    width: 44px;
+    height: 44px;
+    font-size: 12px;
+  }
+  .topbar .profile-actions button {
+    min-height: 48px;
+    font-size: 14px;
+  }
+  .topbar .profile-actions button svg {
+    width: 18px;
+  }
+  .app-footer {
+    height: calc(42px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .main-shell > main {
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Mobile text should be readable at normal zoom, including supporting labels. */
+@media (max-width: 680px) {
+  body {
+    font-size: 16px;
+  }
+  .app-shell p,
+  .app-shell label,
+  .app-shell button,
+  .app-shell .editor-secondary,
+  .app-shell .text-button {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .app-shell input,
+  .app-shell select,
+  .app-shell textarea,
+  .app-shell .search input {
+    font-size: 16px;
+  }
+  .app-shell small,
+  .app-shell .eyebrow,
+  .app-shell .plan-caption,
+  .app-shell .plan-caption > span:first-child,
+  .app-shell .plan-legend,
+  .app-shell .rack-card-heading > strong,
+  .app-shell .slot-labels,
+  .app-shell .table-head {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .app-shell .eyebrow {
+    letter-spacing: 1px;
+  }
+  .page-heading {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .page-heading h1,
+  .page-heading p {
+    max-width: none;
+  }
+  .page-heading h1 {
+    font-size: 28px;
+  }
+  .page-heading-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 0;
+    width: 100%;
+  }
+  .app-shell .page-heading-actions button {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  .stat {
+    padding: 16px 12px;
+  }
+  .app-shell .stat > div > span,
+  .app-shell .stat strong small,
+  .app-shell .cellar-title > div > span {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #756b62;
+  }
+  .stat strong {
+    font-size: 28px;
+  }
+  .stat strong em {
+    font-size: 16px;
+  }
+  .cellar-toolbar {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .app-shell .cellar-title h2 {
+    font-size: 17px;
+  }
+  .cellar-title > div > span {
+    flex-wrap: wrap;
+  }
+  .app-shell .cellar-edit-actions .subtle,
+  .app-shell .segmented button,
+  .app-shell .rack-tabs button {
+    font-size: 14px;
+    min-height: 44px;
+  }
+  .rack-tabs,
+  .view-toolbar {
+    flex-wrap: wrap;
+  }
+  .rack-card-heading {
+    flex-wrap: wrap;
+  }
+  .rack-card h2 {
+    font-size: 21px;
+  }
+  .app-shell .wine-table strong {
+    font-size: 14px;
+  }
+  .app-shell .wine-table small {
+    font-size: 12px;
+  }
+  .app-shell .sidebar nav button {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  .app-shell .profile-trigger {
+    font-size: 14px;
+  }
+}

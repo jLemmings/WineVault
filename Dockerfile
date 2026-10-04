@@ -12,7 +12,13 @@ RUN go mod download
 COPY backend/ ./
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -trimpath -ldflags="-s -w" -o /out/winevault .
+RUN CGO_ENABLED=0 \
+    GOOS=${TARGETOS:-linux} \
+    GOARCH=${TARGETARCH:-amd64} \
+    go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /out/winevault .
 
 FROM node:22-bookworm-slim
 WORKDIR /app

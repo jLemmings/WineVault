@@ -5,9 +5,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"os"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"os"
 )
 
 //go:embed migrations/001_initial.sql
@@ -59,7 +60,11 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, legacyPath string) error {
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(874193205)"); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, "CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())"); err != nil {
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+		    version integer PRIMARY KEY,
+		    applied_at timestamptz NOT NULL DEFAULT now())
+	`); err != nil {
 		return err
 	}
 	var applied bool
@@ -232,7 +237,13 @@ func migrateEditors(ctx context.Context, tx pgx.Tx, fresh bool) error {
 		}
 	}
 	if fresh {
-		if _, err := tx.Exec(ctx, `UPDATE cellars SET layout=jsonb_set(layout,'{tableEnabled}','false') WHERE NOT EXISTS(SELECT 1 FROM racks)`); err != nil {
+		if _, err := tx.Exec(ctx, `
+		UPDATE cellars
+		SET layout = jsonb_set(layout, '{tableEnabled}', 'false')
+		WHERE NOT EXISTS (
+		    SELECT 1 FROM racks
+		)
+	`); err != nil {
 			return err
 		}
 	}

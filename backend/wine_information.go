@@ -29,7 +29,25 @@ type wineInfo struct {
 
 func (s *Store) readWineInfo(ctx context.Context, bottleID string) (wineInfo, error) {
 	var info wineInfo
-	err := s.db.QueryRow(ctx, `SELECT i.id,i.name,i.wine_type,i.status,i.source_id,i.payload,i.fetched_at,i.attempted_at,i.message,i.candidates,i.search_query FROM wine_information i JOIN bottles b ON b.information_id=i.id WHERE b.id=$1`, bottleID).Scan(&info.ID, &info.Name, &info.Type, &info.Status, &info.SourceID, &info.Data, &info.FetchedAt, &info.AttemptedAt, &info.Message, &info.Candidates, &info.SearchQuery)
+	err := s.db.QueryRow(ctx, `
+		SELECT
+		    i.id,
+		    i.name,
+		    i.wine_type,
+		    i.status,
+		    i.source_id,
+		    i.payload,
+		    i.fetched_at,
+		    i.attempted_at,
+		    i.message,
+		    i.candidates,
+		    i.search_query
+		FROM
+		    wine_information i
+		    JOIN bottles b ON b.information_id = i.id
+		WHERE
+		    b.id = $1
+	`, bottleID).Scan(&info.ID, &info.Name, &info.Type, &info.Status, &info.SourceID, &info.Data, &info.FetchedAt, &info.AttemptedAt, &info.Message, &info.Candidates, &info.SearchQuery)
 	return info, err
 }
 func validInfoBottleID(w http.ResponseWriter, r *http.Request) bool {
@@ -78,7 +96,20 @@ func (s *Store) enrichWine(ctx context.Context, bottleID string, force bool, cho
 	if !force && info.Status != "not_fetched" {
 		return info, nil
 	}
-	lease, err := s.db.Exec(ctx, `UPDATE wine_information SET status='fetching',message='',attempted_at=now() WHERE id=$1 AND (status!='fetching' OR attempted_at<now()-interval '1 minute') AND ($2 OR status='not_fetched')`, info.ID, force)
+	lease, err := s.db.Exec(ctx, `
+		UPDATE
+		    wine_information
+		SET
+		    status = 'fetching',
+		    message = '',
+		    attempted_at = now()
+		WHERE
+		    id = $1
+		    AND (status != 'fetching'
+		        OR attempted_at < now() - interval '1 minute')
+		    AND ($2
+		        OR status = 'not_fetched')
+	`, info.ID, force)
 	if err != nil {
 		return info, err
 	}
@@ -103,7 +134,18 @@ func (s *Store) enrichWine(ctx context.Context, bottleID string, force bool, cho
 		}
 		log.Printf("GrapeMinds enrichment status=%s information_id=%d", status, info.ID)
 	} else {
-		_, err = s.db.Exec(saveCtx, `UPDATE wine_information SET status='ready',source_id=$2,payload=$3,fetched_at=now(),message='' WHERE id=$1`, info.ID, sourceID, payload)
+		_, err = s.db.Exec(saveCtx, `
+		UPDATE
+		    wine_information
+		SET
+		    status = 'ready',
+		    source_id = $2,
+		    payload = $3,
+		    fetched_at = now(),
+		    message = ''
+		WHERE
+		    id = $1
+	`, info.ID, sourceID, payload)
 	}
 	if err != nil {
 		return info, err

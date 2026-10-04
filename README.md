@@ -177,12 +177,12 @@ Database data persists in the Compose-managed `winevault_postgres_data` volume. 
 
 Defaults work without creating any configuration files:
 
-| Component | Setting | Default |
-| --- | --- | --- |
-| Go API | `DATABASE_URL` | `postgres://winevault:winevault_dev@127.0.0.1:5432/winevault?sslmode=disable` |
-| Go API | `HTTP_ADDR` | `:8080` |
-| First migration only | `WINEVAULT_LEGACY_JSON` | `data/bottles.json`, relative to backend working directory |
-| Nuxt proxy | API address | `http://127.0.0.1:8080` in `frontend/nuxt.config.ts` |
+| Component            | Setting                 | Default                                                                       |
+| -------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| Go API               | `DATABASE_URL`          | `postgres://winevault:winevault_dev@127.0.0.1:5432/winevault?sslmode=disable` |
+| Go API               | `HTTP_ADDR`             | `:8080`                                                                       |
+| First migration only | `WINEVAULT_LEGACY_JSON` | `data/bottles.json`, relative to backend working directory                    |
+| Nuxt proxy           | API address             | `http://127.0.0.1:8080` in `frontend/nuxt.config.ts`                          |
 
 To change Compose credentials or the published port, copy `.env.example` to `.env` and edit it. Set the matching `DATABASE_URL` in the backend process environment; the Go process does not automatically load Compose's `.env` file. In PowerShell:
 
@@ -240,7 +240,6 @@ To relocate a bottle, open it from Wine Collection or a rack, choose **Move bott
 
 Choose **History** in the sidebar to see dated additions and enjoyed bottles, filter by activity, and load older entries. Each bottle keeps a snapshot of its wine details and shelf address even after it is enjoyed or its shelf changes. Restart the backend to apply migration 005 and enable tracking. Earlier additions and removals were not recorded and cannot be reconstructed; existing inventory is not assigned invented addition dates. Batch history commits with the bottles, so failed additions do not create history entries.
 
-
 ## Collection tools and drinking windows
 
 The collection supports type, rack, region, and drinking-window filters, sorting by name/vintage/window end, and **Group matching wines**. Grouping combines the currently filtered bottles by normalized name, region, type, and vintage. Open a group to select an individual bottle in **Find this wine**.
@@ -297,3 +296,9 @@ Additional APIs:
 - `GET /api/purchases`: recorded purchases, including enjoyed bottles
 
 Verification: run Go integration tests with `TEST_DATABASE_URL`; run `node --test tests/purchases.test.mjs` for decimal and summary checks and `node tests/transfers-purchases.mjs` for mocked browser flow checks. CSV and purchase browser tests do not modify live inventory.
+
+## Code formatting
+
+Frontend source, styles, JSON/YAML configuration, and documentation use the pinned Prettier version and root `.prettierrc.json`. From `frontend/`, run `npm run format` to format supported files or `npm run format:check` to verify them. Generated output, dependencies, secrets, and imported data are excluded.
+
+Go source uses `gofmt` with imports grouped by `goimports`. PostgreSQL migrations and long embedded SQL queries use `pg_format` with four-space indentation and uppercase keywords. Shell scripts use `shfmt -i 2`. The root `.editorconfig` defines indentation and line endings for editors.
