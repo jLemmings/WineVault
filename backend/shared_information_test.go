@@ -10,17 +10,39 @@ func TestSharedInformationMigrationAndNewVintages(t *testing.T) {
 	ctx := context.Background()
 	// Reproduce an installation with separate per-vintage records before migration 009.
 	schema := initialSchema + "DELETE FROM cellars;" + legacyLayout + initialSeed + editorSchema + nonVintageSchema + barcodeSchema + historySchema + authSchema + informationSchema + informationSearchSchema +
-		`CREATE TABLE schema_migrations(version integer PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now()); INSERT INTO schema_migrations(version) SELECT generate_series(1,8);`
+		`
+		CREATE TABLE schema_migrations (
+		    version integer PRIMARY KEY,
+		    applied_at timestamptz NOT NULL DEFAULT now()
+		);
+
+		INSERT INTO schema_migrations (version)
+		SELECT
+		    generate_series(1, 8);
+	`
 	if _, err := pool.Exec(ctx, schema); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot) VALUES
- ('Shared Estate',2016,'France','Red','C',27),
- ('Shared Estate',2018,'France','Red','C',28),
- (' shared  estate ',2020,' france ','Red','C',29)`); err != nil {
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO bottles (name, vintage, region, wine_type, rack_id, slot)
+		    VALUES ('Shared Estate', 2016, 'France', 'Red', 'C', 27),
+		    ('Shared Estate', 2018, 'France', 'Red', 'C', 28),
+		    (' shared  estate ', 2020, ' france ', 'Red', 'C', 29)
+	`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE wine_information SET status='ready',payload='{"id":42,"display_name":"Shared Estate"}',source_id=42,fetched_at=now() WHERE name='Shared Estate' AND vintage=2018`); err != nil {
+	if _, err := pool.Exec(ctx, `
+		UPDATE
+		    wine_information
+		SET
+		    status = 'ready',
+		    payload = '{"id":42,"display_name":"Shared Estate"}',
+		    source_id = 42,
+		    fetched_at = now()
+		WHERE
+		    name = 'Shared Estate'
+		    AND vintage = 2018
+	`); err != nil {
 		t.Fatal(err)
 	}
 	if err := migrateFixture(ctx, pool, ""); err != nil {
@@ -46,7 +68,16 @@ func TestSharedInformationMigrationAndNewVintages(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	var status string
-	if err := pool.QueryRow(ctx, `SELECT i.status FROM wine_information i JOIN bottles b ON b.information_id=i.id WHERE b.rack_id='C' AND b.slot=26`).Scan(&status); err != nil || status != "ready" {
+	if err := pool.QueryRow(ctx, `
+		SELECT
+		    i.status
+		FROM
+		    wine_information i
+		    JOIN bottles b ON b.information_id = i.id
+		WHERE
+		    b.rack_id = 'C'
+		    AND b.slot = 26
+	`).Scan(&status); err != nil || status != "ready" {
 		t.Fatal("new vintage did not reuse saved details", status, err)
 	}
 	if err := migrateFixture(ctx, pool, ""); err != nil {

@@ -123,7 +123,16 @@ func (a *authService) session(r *http.Request) (string, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	var username string
-	err = a.db.QueryRow(ctx, `SELECT a.username FROM owner_sessions s JOIN owner_account a ON a.id=s.owner_id WHERE s.token_hash=$1 AND s.expires_at>now()`, tokenHash(cookie.Value)).Scan(&username)
+	err = a.db.QueryRow(ctx, `
+		SELECT
+		    a.username
+		FROM
+		    owner_sessions s
+		    JOIN owner_account a ON a.id = s.owner_id
+		WHERE
+		    s.token_hash = $1
+		    AND s.expires_at > now()
+	`, tokenHash(cookie.Value)).Scan(&username)
 	return username, err
 }
 

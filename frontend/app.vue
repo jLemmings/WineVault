@@ -1,116 +1,1116 @@
 <script setup>
-import { purchasePayload } from '~/utils/purchases'
-import { preferredWineTypes, suggestPlacement } from '~/utils/placement'
-import { Wallet, Wine, Library, Map, Grid2X2, Plus, ChevronDown, ArrowUpRight, ArrowRight, Search, Bell, Settings2, Droplets, Check, X, Minus, DoorOpen, Layers, SlidersHorizontal, LogOut, Pencil, ScanLine, History } from 'lucide-vue-next'
-const cellar=ref(null)
-const repositoryUrl=useRuntimeConfig().public.repositoryUrl
-const scannerOpen=ref(false),transferOpen=ref(false)
-async function collectionImported(count){transferOpen.value=false;await refresh();notify(count+' bottles imported into your cellar.')}
-function selectPurchase(id){detail.value=bottles.value.find(b=>b.id===id)||null}
-function openScanner(){modal.value=false;scannerOpen.value=true}
-async function scannerSaved(){scannerOpen.value=false;await refresh();notify('Your wine has been added to the cellar.')}
+  import { purchasePayload } from '~/utils/purchases';
+  import { preferredWineTypes, suggestPlacement } from '~/utils/placement';
+  import {
+    Wallet,
+    Wine,
+    Library,
+    Map,
+    Grid2X2,
+    Plus,
+    ChevronDown,
+    ArrowUpRight,
+    ArrowRight,
+    Search,
+    Bell,
+    Settings2,
+    Droplets,
+    Check,
+    X,
+    Minus,
+    DoorOpen,
+    Layers,
+    SlidersHorizontal,
+    LogOut,
+    Pencil,
+    ScanLine,
+    History,
+  } from 'lucide-vue-next';
+  const cellar = ref(null);
+  const repositoryUrl = useRuntimeConfig().public.repositoryUrl;
+  const scannerOpen = ref(false),
+    transferOpen = ref(false);
+  async function collectionImported(count) {
+    transferOpen.value = false;
+    await refresh();
+    notify(count + ' bottles imported into your cellar.');
+  }
+  function selectPurchase(id) {
+    detail.value = bottles.value.find((b) => b.id === id) || null;
+  }
+  function openScanner() {
+    modal.value = false;
+    scannerOpen.value = true;
+  }
+  async function scannerSaved() {
+    scannerOpen.value = false;
+    await refresh();
+    notify('Your wine has been added to the cellar.');
+  }
 
-const roomEditing=ref(false),shelfEditing=ref(false),editingShelf=ref(null)
-async function closeEditor(){roomEditing.value=false;shelfEditing.value=false;await refresh()}
-function editShelf(shelf=null){editingShelf.value=shelf;shelfEditing.value=true}
-async function editorSaved(){roomEditing.value=false;shelfEditing.value=false;await refresh();notify('Your cellar changes have been saved.')}
-const slotAddress=b=>{const columns=racks.value.find(r=>r.id===b.rack)?.columns||6;return String.fromCharCode(65+b.slot%columns)+(Math.floor(b.slot/columns)+1)}
+  const roomEditing = ref(false),
+    shelfEditing = ref(false),
+    editingShelf = ref(null);
+  async function closeEditor() {
+    roomEditing.value = false;
+    shelfEditing.value = false;
+    await refresh();
+  }
+  function editShelf(shelf = null) {
+    editingShelf.value = shelf;
+    shelfEditing.value = true;
+  }
+  async function editorSaved() {
+    roomEditing.value = false;
+    shelfEditing.value = false;
+    await refresh();
+    notify('Your cellar changes have been saved.');
+  }
+  const slotAddress = (b) => {
+    const columns = racks.value.find((r) => r.id === b.rack)?.columns || 6;
+    return String.fromCharCode(65 + (b.slot % columns)) + (Math.floor(b.slot / columns) + 1);
+  };
 
-const racks=computed(()=>cellar.value?.racks ?? [])
-const totalCapacity=computed(()=>racks.value.reduce((total,r)=>total+r.capacity,0))
-const ownerInitials=computed(()=>cellar.value?.owner.split(" ").map(part=>part[0]).slice(0,2).join("") ?? "")
-const bottles=ref([]), loaded=ref(false), error=ref(''), view=ref('plan'), selected=ref(''), section=ref('My cellar'), query=ref(''), modal=ref(false), detail=ref(null), saving=ref(false), toast=ref(''), filter=ref('all'), rackFilter=ref('all'), settings=ref(false)
-const form=reactive({name:'',vintage:2020,region:'',type:'Red',rack:'',quantity:1,slots:[],price:'',currency:'CHF',purchaseDate:'',seller:''})
-const racksOnly=computed(()=>cellar.value?.preferences?.viewMode==='racks-only')
-const entryTypes=computed(()=>preferredWineTypes(cellar.value?.preferences))
-watch(racksOnly,only=>{view.value=only?'racks':'plan';rackFilter.value='all'})
-const active=computed(()=>racks.value.find(r=>r.id===selected.value))
-const count=id=>bottles.value.filter(b=>b.rack===id).length
-const occupancy=computed(()=>(totalCapacity.value ? (bottles.value.length/totalCapacity.value)*100 : 0).toFixed(1))
-const slotBottle=(id,slot)=>bottles.value.find(b=>b.rack===id&&b.slot===slot)
-const collectionRack=ref('all'),regionFilter=ref('all'),sort=ref('name'),grouped=ref(false),windowFilter=ref('all'),undoId=ref(''),toastUndo=ref(false)
-const regions=computed(()=>[...new Set(bottles.value.map(b=>b.region))].sort())
-function windowStatus(b){const year=new Date().getFullYear();return b.drinkStart==null?'Unknown':year<b.drinkStart?'Hold':year>b.drinkEnd?'Past your window':'Ready'}
-const reminders=computed(()=>bottles.value.filter(b=>['Ready','Past your window'].includes(windowStatus(b))))
-function showReminders(){section.value='Wine collection';windowFilter.value='Drink next';query.value='';filter.value='all';collectionRack.value='all';regionFilter.value='all';sort.value='window'}
-const filtered=computed(()=>bottles.value.filter(b=>(filter.value==='all'||b.type===filter.value)&&(collectionRack.value==='all'||b.rack===collectionRack.value)&&(regionFilter.value==='all'||b.region===regionFilter.value)&&(windowFilter.value==='all'||(windowFilter.value==='Drink next'?['Ready','Past your window'].includes(windowStatus(b)):windowStatus(b)===windowFilter.value))&&`${b.name} ${b.region} ${b.vintage || "NV"}`.toLowerCase().includes(query.value.trim().toLowerCase())).sort((a,b)=>sort.value==='vintage'?b.vintage-a.vintage||a.name.localeCompare(b.name):sort.value==='window'?(a.drinkEnd??9999)-(b.drinkEnd??9999)||a.name.localeCompare(b.name):a.name.localeCompare(b.name)||b.vintage-a.vintage))
-const collectionRows=computed(()=>{if(!grouped.value)return filtered.value.map(b=>({...b,quantity:1}));const groups=new globalThis.Map();for(const b of filtered.value){const key=JSON.stringify([b.name.trim().replace(/\s+/g,' ').toLowerCase(),b.vintage,b.region.trim().replace(/\s+/g,' ').toLowerCase(),b.type]);if(groups.has(key))groups.get(key).quantity++;else groups.set(key,{...b,quantity:1})}return [...groups.values()]})
-function closeDialog(){if(saving.value)return;modal.value=false;detail.value=null;settings.value=false}
-async function detailsSaved(){await refresh();detail.value=bottles.value.find(b=>b.id===detail.value?.id)||null;notify('Your changes have been saved.')}
-async function restored(){undoId.value='';await refresh();notify('Bottle restored to your cellar.')}
-function undoEnjoyed(){section.value='History';toast.value=''}
-async function refresh(){try{const data=await $fetch('/api/cellar');cellar.value=data;bottles.value=data.bottles;if(!data.racks.some(r=>r.id===selected.value))selected.value=data.racks[0]?.id ?? '';error.value='';loaded.value=true;return true}catch{error.value='The cellar database is unavailable. Check PostgreSQL and the Go backend, then try again.';return false}}
-function clearAccount(){cellar.value=null;bottles.value=[];loaded.value=false;modal.value=false;detail.value=null;settings.value=false;transferOpen.value=false;view.value='plan';scannerOpen.value=false;roomEditing.value=false;shelfEditing.value=false;toast.value='';undoId.value=''}
-async function signOut(){try{await $fetch('/api/auth/logout',{method:'POST',retry:0});window.dispatchEvent(new Event('winevault-signed-out'))}catch{notify('Could not sign out. Please try again.')}}
-let toastTimer
-function notify(message,undo=false){clearTimeout(toastTimer);toastUndo.value=undo;toast.value=message;toastTimer=setTimeout(()=>toast.value='',undo?10000:3500)}
-const manualError=ref(''),placementHint=ref(''),autoPlacement=ref(true)
-const manualRack=computed(()=>racks.value.find(r=>r.id===form.rack))
-const freeSlots=computed(()=>Array.from({length:manualRack.value?.capacity||0},(_,i)=>i).filter(slot=>!slotBottle(form.rack,slot)))
-const validSlots=computed(()=>Number.isInteger(form.quantity)&&form.quantity>0&&form.quantity<=freeSlots.value.length&&form.slots.length===form.quantity&&form.slots.every(slot=>freeSlots.value.includes(slot)))
-watch(()=>form.quantity,()=>{if(modal.value&&autoPlacement.value)applyPlacement();else form.slots=form.slots.slice(0,Math.max(0,Number(form.quantity)||0))},{flush:'sync'})
-watch(()=>form.type,()=>{if(modal.value){autoPlacement.value=true;applyPlacement()}},{flush:'sync'})
-watch(freeSlots,()=>{form.slots=form.slots.filter(slot=>freeSlots.value.includes(slot))})
-function toggleSlot(slot){autoPlacement.value=false;placementHint.value='';if(form.slots.includes(slot))form.slots=form.slots.filter(s=>s!==slot);else if(form.slots.length<form.quantity)form.slots.push(slot)}
-const manualSlotLabel=slot=>slotAddress({rack:form.rack,slot})
-function applyPlacement(){const suggestion=suggestPlacement({racks:racks.value,bottles:bottles.value,preferences:cellar.value?.preferences,type:form.type,quantity:form.quantity,fallbackRack:form.rack});form.rack=suggestion.rack;form.slots=suggestion.slots;placementHint.value=suggestion.message}
-function chooseManualRack(){autoPlacement.value=false;form.slots=freeSlots.value.slice(0,form.quantity);placementHint.value=''}
-async function preferencesSaved(){await refresh();notify('Your preferences have been saved.')}
-function add(rack=selected.value,slot=null){if(!loaded.value||!racks.value.length)return;form.rack=rack;form.quantity=1;form.price='';form.currency='CHF';form.purchaseDate='';form.seller='';form.type=entryTypes.value[0];autoPlacement.value=slot===null;placementHint.value='';if(slot!==null&&!slotBottle(rack,slot))form.slots=[slot];else applyPlacement();manualError.value='';modal.value=true;detail.value=null}
+  const racks = computed(() => cellar.value?.racks ?? []);
+  const totalCapacity = computed(() => racks.value.reduce((total, r) => total + r.capacity, 0));
+  const ownerInitials = computed(
+    () =>
+      cellar.value?.owner
+        .split(' ')
+        .map((part) => part[0])
+        .slice(0, 2)
+        .join('') ?? '',
+  );
+  const bottles = ref([]),
+    loaded = ref(false),
+    error = ref(''),
+    view = ref('plan'),
+    selected = ref(''),
+    section = ref('My cellar'),
+    query = ref(''),
+    modal = ref(false),
+    detail = ref(null),
+    saving = ref(false),
+    toast = ref(''),
+    filter = ref('all'),
+    rackFilter = ref('all'),
+    settings = ref(false);
+  const form = reactive({
+    name: '',
+    vintage: 2020,
+    region: '',
+    type: 'Red',
+    rack: '',
+    quantity: 1,
+    slots: [],
+    price: '',
+    currency: 'CHF',
+    purchaseDate: '',
+    seller: '',
+  });
+  const racksOnly = computed(() => cellar.value?.preferences?.viewMode === 'racks-only');
+  const entryTypes = computed(() => preferredWineTypes(cellar.value?.preferences));
+  watch(racksOnly, (only) => {
+    view.value = only ? 'racks' : 'plan';
+    rackFilter.value = 'all';
+  });
+  const active = computed(() => racks.value.find((r) => r.id === selected.value));
+  const count = (id) => bottles.value.filter((b) => b.rack === id).length;
+  const occupancy = computed(() =>
+    (totalCapacity.value ? (bottles.value.length / totalCapacity.value) * 100 : 0).toFixed(1),
+  );
+  const slotBottle = (id, slot) => bottles.value.find((b) => b.rack === id && b.slot === slot);
+  const collectionRack = ref('all'),
+    regionFilter = ref('all'),
+    sort = ref('name'),
+    grouped = ref(false),
+    windowFilter = ref('all'),
+    undoId = ref(''),
+    toastUndo = ref(false);
+  const regions = computed(() => [...new Set(bottles.value.map((b) => b.region))].sort());
+  function windowStatus(b) {
+    const year = new Date().getFullYear();
+    return b.drinkStart == null
+      ? 'Unknown'
+      : year < b.drinkStart
+        ? 'Hold'
+        : year > b.drinkEnd
+          ? 'Past your window'
+          : 'Ready';
+  }
+  const reminders = computed(() =>
+    bottles.value.filter((b) => ['Ready', 'Past your window'].includes(windowStatus(b))),
+  );
+  function showReminders() {
+    section.value = 'Wine collection';
+    windowFilter.value = 'Drink next';
+    query.value = '';
+    filter.value = 'all';
+    collectionRack.value = 'all';
+    regionFilter.value = 'all';
+    sort.value = 'window';
+  }
+  const filtered = computed(() =>
+    bottles.value
+      .filter(
+        (b) =>
+          (filter.value === 'all' || b.type === filter.value) &&
+          (collectionRack.value === 'all' || b.rack === collectionRack.value) &&
+          (regionFilter.value === 'all' || b.region === regionFilter.value) &&
+          (windowFilter.value === 'all' ||
+            (windowFilter.value === 'Drink next'
+              ? ['Ready', 'Past your window'].includes(windowStatus(b))
+              : windowStatus(b) === windowFilter.value)) &&
+          `${b.name} ${b.region} ${b.vintage || 'NV'}`
+            .toLowerCase()
+            .includes(query.value.trim().toLowerCase()),
+      )
+      .sort((a, b) =>
+        sort.value === 'vintage'
+          ? b.vintage - a.vintage || a.name.localeCompare(b.name)
+          : sort.value === 'window'
+            ? (a.drinkEnd ?? 9999) - (b.drinkEnd ?? 9999) || a.name.localeCompare(b.name)
+            : a.name.localeCompare(b.name) || b.vintage - a.vintage,
+      ),
+  );
+  const collectionRows = computed(() => {
+    if (!grouped.value) return filtered.value.map((b) => ({ ...b, quantity: 1 }));
+    const groups = new globalThis.Map();
+    for (const b of filtered.value) {
+      const key = JSON.stringify([
+        b.name.trim().replace(/\s+/g, ' ').toLowerCase(),
+        b.vintage,
+        b.region.trim().replace(/\s+/g, ' ').toLowerCase(),
+        b.type,
+      ]);
+      if (groups.has(key)) groups.get(key).quantity++;
+      else groups.set(key, { ...b, quantity: 1 });
+    }
+    return [...groups.values()];
+  });
+  function closeDialog() {
+    if (saving.value) return;
+    modal.value = false;
+    detail.value = null;
+    settings.value = false;
+  }
+  async function detailsSaved() {
+    await refresh();
+    detail.value = bottles.value.find((b) => b.id === detail.value?.id) || null;
+    notify('Your changes have been saved.');
+  }
+  async function restored() {
+    undoId.value = '';
+    await refresh();
+    notify('Bottle restored to your cellar.');
+  }
+  function undoEnjoyed() {
+    section.value = 'History';
+    toast.value = '';
+  }
+  async function refresh() {
+    try {
+      const data = await $fetch('/api/cellar');
+      cellar.value = data;
+      bottles.value = data.bottles;
+      if (!data.racks.some((r) => r.id === selected.value))
+        selected.value = data.racks[0]?.id ?? '';
+      error.value = '';
+      loaded.value = true;
+      return true;
+    } catch {
+      error.value =
+        'The cellar database is unavailable. Check PostgreSQL and the Go backend, then try again.';
+      return false;
+    }
+  }
+  function clearAccount() {
+    cellar.value = null;
+    bottles.value = [];
+    loaded.value = false;
+    modal.value = false;
+    detail.value = null;
+    settings.value = false;
+    transferOpen.value = false;
+    view.value = 'plan';
+    scannerOpen.value = false;
+    roomEditing.value = false;
+    shelfEditing.value = false;
+    toast.value = '';
+    undoId.value = '';
+  }
+  async function signOut() {
+    try {
+      await $fetch('/api/auth/logout', { method: 'POST', retry: 0 });
+      window.dispatchEvent(new Event('winevault-signed-out'));
+    } catch {
+      notify('Could not sign out. Please try again.');
+    }
+  }
+  let toastTimer;
+  function notify(message, undo = false) {
+    clearTimeout(toastTimer);
+    toastUndo.value = undo;
+    toast.value = message;
+    toastTimer = setTimeout(() => (toast.value = ''), undo ? 10000 : 3500);
+  }
+  const manualError = ref(''),
+    placementHint = ref(''),
+    autoPlacement = ref(true);
+  const manualRack = computed(() => racks.value.find((r) => r.id === form.rack));
+  const freeSlots = computed(() =>
+    Array.from({ length: manualRack.value?.capacity || 0 }, (_, i) => i).filter(
+      (slot) => !slotBottle(form.rack, slot),
+    ),
+  );
+  const validSlots = computed(
+    () =>
+      Number.isInteger(form.quantity) &&
+      form.quantity > 0 &&
+      form.quantity <= freeSlots.value.length &&
+      form.slots.length === form.quantity &&
+      form.slots.every((slot) => freeSlots.value.includes(slot)),
+  );
+  watch(
+    () => form.quantity,
+    () => {
+      if (modal.value && autoPlacement.value) applyPlacement();
+      else form.slots = form.slots.slice(0, Math.max(0, Number(form.quantity) || 0));
+    },
+    { flush: 'sync' },
+  );
+  watch(
+    () => form.type,
+    () => {
+      if (modal.value) {
+        autoPlacement.value = true;
+        applyPlacement();
+      }
+    },
+    { flush: 'sync' },
+  );
+  watch(freeSlots, () => {
+    form.slots = form.slots.filter((slot) => freeSlots.value.includes(slot));
+  });
+  function toggleSlot(slot) {
+    autoPlacement.value = false;
+    placementHint.value = '';
+    if (form.slots.includes(slot)) form.slots = form.slots.filter((s) => s !== slot);
+    else if (form.slots.length < form.quantity) form.slots.push(slot);
+  }
+  const manualSlotLabel = (slot) => slotAddress({ rack: form.rack, slot });
+  function applyPlacement() {
+    const suggestion = suggestPlacement({
+      racks: racks.value,
+      bottles: bottles.value,
+      preferences: cellar.value?.preferences,
+      type: form.type,
+      quantity: form.quantity,
+      fallbackRack: form.rack,
+    });
+    form.rack = suggestion.rack;
+    form.slots = suggestion.slots;
+    placementHint.value = suggestion.message;
+  }
+  function chooseManualRack() {
+    autoPlacement.value = false;
+    form.slots = freeSlots.value.slice(0, form.quantity);
+    placementHint.value = '';
+  }
+  async function preferencesSaved() {
+    await refresh();
+    notify('Your preferences have been saved.');
+  }
+  function add(rack = selected.value, slot = null) {
+    if (!loaded.value || !racks.value.length) return;
+    form.rack = rack;
+    form.quantity = 1;
+    form.price = '';
+    form.currency = 'CHF';
+    form.purchaseDate = '';
+    form.seller = '';
+    form.type = entryTypes.value[0];
+    autoPlacement.value = slot === null;
+    placementHint.value = '';
+    if (slot !== null && !slotBottle(rack, slot)) form.slots = [slot];
+    else applyPlacement();
+    manualError.value = '';
+    modal.value = true;
+    detail.value = null;
+  }
 
-async function save(){
- if(saving.value||!validSlots.value)return
- saving.value=true;manualError.value=''
- try{
-  if(!await refresh())throw new Error('Could not refresh shelf availability. Please try again.')
-  if(!validSlots.value)throw new Error('A selected slot is no longer available. Review your selection.')
-  await $fetch('/api/bottles/batch',{method:'POST',body:{bottle:{name:form.name.trim(),vintage:Number(form.vintage),region:form.region.trim(),type:form.type,rack:form.rack,...purchasePayload(form)},slots:form.slots},retry:0})
-  const quantity=form.quantity;await refresh();modal.value=false;form.name='';notify(quantity===1?'Your bottle has a new home.':quantity+' bottles have a new home.')
- }catch(e){manualError.value=typeof e.data==='string'?e.data:e.message||'Could not save wine.';if(e.status===409||e.statusCode===409)await refresh()}finally{saving.value=false}
-}
-async function bottleMoved(bottle){detail.value=bottle;await refresh();detail.value=bottles.value.find(b=>b.id===bottle.id)||null;notify('Bottle moved to Rack '+bottle.rack+' ? Slot '+slotAddress(bottle)+'.')}
-async function removeBottle(){saving.value=true;try{await $fetch('/api/bottles',{method:'DELETE',query:{id:detail.value.id}});undoId.value=detail.value.id;detail.value=null;await refresh();notify('Bottle marked as enjoyed.',true)}catch{notify('Could not update this bottle. Please try again.')}finally{saving.value=false}}
+  async function save() {
+    if (saving.value || !validSlots.value) return;
+    saving.value = true;
+    manualError.value = '';
+    try {
+      if (!(await refresh()))
+        throw new Error('Could not refresh shelf availability. Please try again.');
+      if (!validSlots.value)
+        throw new Error('A selected slot is no longer available. Review your selection.');
+      await $fetch('/api/bottles/batch', {
+        method: 'POST',
+        body: {
+          bottle: {
+            name: form.name.trim(),
+            vintage: Number(form.vintage),
+            region: form.region.trim(),
+            type: form.type,
+            rack: form.rack,
+            ...purchasePayload(form),
+          },
+          slots: form.slots,
+        },
+        retry: 0,
+      });
+      const quantity = form.quantity;
+      await refresh();
+      modal.value = false;
+      form.name = '';
+      notify(
+        quantity === 1 ? 'Your bottle has a new home.' : quantity + ' bottles have a new home.',
+      );
+    } catch (e) {
+      manualError.value = typeof e.data === 'string' ? e.data : e.message || 'Could not save wine.';
+      if (e.status === 409 || e.statusCode === 409) await refresh();
+    } finally {
+      saving.value = false;
+    }
+  }
+  async function bottleMoved(bottle) {
+    detail.value = bottle;
+    await refresh();
+    detail.value = bottles.value.find((b) => b.id === bottle.id) || null;
+    notify('Bottle moved to Rack ' + bottle.rack + ' ? Slot ' + slotAddress(bottle) + '.');
+  }
+  async function removeBottle() {
+    saving.value = true;
+    try {
+      await $fetch('/api/bottles', { method: 'DELETE', query: { id: detail.value.id } });
+      undoId.value = detail.value.id;
+      detail.value = null;
+      await refresh();
+      notify('Bottle marked as enjoyed.', true);
+    } catch {
+      notify('Could not update this bottle. Please try again.');
+    } finally {
+      saving.value = false;
+    }
+  }
 </script>
 
 <template>
- <AuthGate @authenticated="refresh" @signed-out="clearAccount"><div class="app-shell">
-  <aside class="sidebar">
-   <a class="brand" href="/" aria-label="WineVault home"><span class="brand-icon"><Wine :size="23"/></span> Wine<span>Vault</span><i>®</i></a>
-   <div class="workspace-label">YOUR PERSONAL COLLECTION</div>
-   <nav><button v-for="item in [{name:'My cellar',icon:Library},{name:'Wine collection',icon:Wine},{name:'History',icon:History},{name:'Purchases',icon:Wallet}]" :class="{current:section===item.name}" @click="section=item.name"><component :is="item.icon" :size="19"/>{{item.name}}<span v-if="item.name==='Wine collection'" class="nav-count">{{bottles.length}}</span></button></nav>
-   <div class="sidebar-bottom"><div class="profile"><div class="avatar">{{ownerInitials}}</div><div><strong>{{cellar?.owner || 'Personal cellar'}}</strong><span>Personal cellar</span></div><button aria-label="Preferences" @click="settings=loaded"><Settings2 :size="17"/></button></div></div>
-  </aside>
-  <div class="main-shell">
-   <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>{{section}}</strong></div><div class="top-actions"><span class="today">A little more organized. A little more enjoyed.</span><button aria-label="Cellar settings" :disabled="!loaded" @click="settings=true"><Settings2 :size="18"/></button><button aria-label="Notifications" @click="showReminders"><Bell :size="18"/><i v-if="reminders.length"></i></button><button aria-label="Sign out" @click="signOut"><LogOut :size="18"/></button><div class="avatar small">{{ownerInitials}}</div></div></header>
-   <main>
-    <div class="page-heading"><div><div class="eyebrow">A PLACE FOR EVERY BOTTLE</div><h1>{{section==='Purchases'?'Your purchases & spending':section==='History'?'Your wine history':section==='Wine collection'?'Your wine collection':'Your cellar, thoughtfully arranged.'}}</h1><p>A little structure for the things that get better with time.</p></div><div class="page-heading-actions"><button class="scan-label-button" :disabled="!loaded" @click="openScanner"><ScanLine :size="16"/>Scan label</button><button class="primary" :disabled="!loaded || !racks.length" @click="add()"><Plus :size="17"/>Add wine</button></div></div>
-    <div v-if="error" class="error-banner">{{error}} <button @click="refresh">Retry connection</button></div>
-    <template v-if="loaded && cellar"><div class="stats"><div class="stat"><span class="stat-icon"><Wine :size="21"/></span><div><span>Total bottles</span><strong>{{bottles.length}} <small>bottles in your cellar</small></strong></div><span class="stat-tag">Your collection</span></div><div class="stat"><span class="stat-icon"><Layers :size="21"/></span><div><span>Cellar capacity</span><strong>{{occupancy}}<em>%</em> <small>{{totalCapacity-bottles.length}} spaces available</small></strong></div><div class="mini-progress"><i :style="{width:occupancy+'%'}"></i></div></div></div>
+  <AuthGate @authenticated="refresh" @signed-out="clearAccount"
+    ><div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="WineVault home"
+          ><span class="brand-icon"><Wine :size="23" /></span> Wine<span>Vault</span><i>®</i></a
+        >
+        <div class="workspace-label">YOUR PERSONAL COLLECTION</div>
+        <nav>
+          <button
+            v-for="item in [
+              { name: 'My cellar', icon: Library },
+              { name: 'Wine collection', icon: Wine },
+              { name: 'History', icon: History },
+              { name: 'Purchases', icon: Wallet },
+            ]"
+            :class="{ current: section === item.name }"
+            @click="section = item.name"
+          >
+            <component :is="item.icon" :size="19" />{{ item.name
+            }}<span v-if="item.name === 'Wine collection'" class="nav-count">{{
+              bottles.length
+            }}</span>
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="profile">
+            <div class="avatar">{{ ownerInitials }}</div>
+            <div>
+              <strong>{{ cellar?.owner || 'Personal cellar' }}</strong
+              ><span>Personal cellar</span>
+            </div>
+            <button aria-label="Preferences" @click="settings = loaded">
+              <Settings2 :size="17" />
+            </button>
+          </div>
+        </div>
+      </aside>
+      <div class="main-shell">
+        <header class="topbar">
+          <div class="breadcrumb">
+            Workspace <span>/</span> <strong>{{ section }}</strong>
+          </div>
+          <div class="top-actions">
+            <span class="today">A little more organized. A little more enjoyed.</span
+            ><button aria-label="Cellar settings" :disabled="!loaded" @click="settings = true">
+              <Settings2 :size="18" /></button
+            ><button aria-label="Notifications" @click="showReminders">
+              <Bell :size="18" /><i v-if="reminders.length"></i></button
+            ><button aria-label="Sign out" @click="signOut"><LogOut :size="18" /></button>
+            <div class="avatar small">{{ ownerInitials }}</div>
+          </div>
+        </header>
+        <main>
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow">A PLACE FOR EVERY BOTTLE</div>
+              <h1>
+                {{
+                  section === 'Purchases'
+                    ? 'Your purchases & spending'
+                    : section === 'History'
+                      ? 'Your wine history'
+                      : section === 'Wine collection'
+                        ? 'Your wine collection'
+                        : 'Your cellar, thoughtfully arranged.'
+                }}
+              </h1>
+              <p>A little structure for the things that get better with time.</p>
+            </div>
+            <div class="page-heading-actions">
+              <button class="scan-label-button" :disabled="!loaded" @click="openScanner">
+                <ScanLine :size="16" />Scan label</button
+              ><button class="primary" :disabled="!loaded || !racks.length" @click="add()">
+                <Plus :size="17" />Add wine
+              </button>
+            </div>
+          </div>
+          <div v-if="error" class="error-banner">
+            {{ error }} <button @click="refresh">Retry connection</button>
+          </div>
+          <template v-if="loaded && cellar"
+            ><div class="stats">
+              <div class="stat">
+                <span class="stat-icon"><Wine :size="21" /></span>
+                <div>
+                  <span>Total bottles</span
+                  ><strong>{{ bottles.length }} <small>bottles in your cellar</small></strong>
+                </div>
+                <span class="stat-tag">Your collection</span>
+              </div>
+              <div class="stat">
+                <span class="stat-icon"><Layers :size="21" /></span>
+                <div>
+                  <span>Cellar capacity</span
+                  ><strong
+                    >{{ occupancy }}<em>%</em>
+                    <small>{{ totalCapacity - bottles.length }} spaces available</small></strong
+                  >
+                </div>
+                <div class="mini-progress"><i :style="{ width: occupancy + '%' }"></i></div>
+              </div>
+            </div>
 
-    <PurchaseTracker v-if="section==='Purchases'" :key="bottles.map(b=>b.id+':'+b.revision).join(',')" @select="selectPurchase"/><div v-else-if="section==='History'" class="history-workspace"><WineHistory :key="bottles.length"/><RestoreBottle :key="bottles.length" :cellar="cellar" :preferred-id="undoId" @restored="restored"/></div><section v-else-if="section==='Wine collection'" class="collection panel"><div class="collection-toolbar"><h2>Every bottle, a story</h2><button class="editor-secondary" @click="transferOpen=true">Import / export CSV</button><div class="search"><Search :size="17"/><input v-model="query" aria-label="Search wine, region, or vintage" placeholder="Search wine, region, vintage…"/></div></div>
-     <div class="collection-filters"><label>Type<select v-model="filter" aria-label="Type"><option value="all">All wines</option><option v-for="type in ['Red','White','Rosé','Champagne','Sparkling','Dessert']" :key="type">{{type}}</option></select></label><label>Rack<select v-model="collectionRack" aria-label="Rack"><option value="all">All racks</option><option v-for="r in racks" :key="r.id" :value="r.id">{{r.name}}</option></select></label><label>Region<select v-model="regionFilter" aria-label="Region"><option value="all">All regions</option><option v-for="region in regions" :key="region">{{region}}</option></select></label><label>Drinking window<select v-model="windowFilter" aria-label="Drinking window"><option value="all">All windows</option><option v-for="status in ['Drink next','Hold','Ready','Past your window','Unknown']" :key="status">{{status}}</option></select></label><label>Sort<select v-model="sort" aria-label="Sort"><option value="name">Wine name</option><option value="vintage">Vintage, newest first</option><option value="window">Window ending soonest</option></select></label><label class="group-toggle"><input v-model="grouped" type="checkbox">Group matching wines</label></div>
-     <div class="planner-summary"><button class="editor-secondary" @click="showReminders">Drink next · {{reminders.length}} bottles</button><span>Your chosen windows guide this list.</span></div>
-     <div class="wine-table"><div class="table-head"><span>WINE</span><span>VINTAGE</span><span>{{grouped?'BOTTLES':'LOCATION'}}</span><span>TYPE / WINDOW</span></div><button v-for="b in collectionRows" :key="b.id" @click="detail=bottles.find(item=>item.id===b.id)"><span><Wine :size="19"/><span><strong>{{b.name}}</strong><small>{{b.region}}</small><WineInfoBadge :bottle="b"/></span></span><span>{{b.vintage || 'NV'}}</span><span>{{grouped?b.quantity+' bottles · View locations':(racks.find(r=>r.id===b.rack)?.name || 'Rack '+b.rack)+' · '+slotAddress(b)}}</span><span class="window-cell">{{b.type}}<small :class="['window-badge',windowStatus(b)==='Ready'?'ready':'']">{{windowStatus(b)}}<template v-if="b.drinkStart!=null"> · {{b.drinkStart}}–{{b.drinkEnd}}</template></small></span></button><p v-if="!filtered.length" class="empty">No bottles found. Try another search or add your first wine.</p></div></section>
-    <section v-else class="cellar-panel panel">
-     <div class="cellar-toolbar"><div class="cellar-title"><span class="cellar-symbol"><Library :size="21"/></span><div><h2>{{cellar?.name || 'Your cellar'}} <ChevronDown :size="15"/></h2><span><i class="green-dot"></i> Private cellar <b>·</b> {{racks.length}} racks <b>·</b> {{bottles.length}} bottles</span></div></div><div class="cellar-edit-actions"><button class="subtle" @click="editShelf()"><Plus :size="16"/>Add shelf</button><button v-if="!racksOnly" class="subtle edit-room-button" @click="roomEditing=true"><Pencil :size="16"/>Edit room</button></div></div>
-     <div class="view-toolbar"><div v-if="!racksOnly" class="segmented"><button :class="{active:view==='plan'}" @click="view='plan'"><Map :size="16"/>Floor plan</button><button :class="{active:view==='racks'}" @click="view='racks'"><Grid2X2 :size="16"/>Rack view</button></div><span><span class="live-dot"></span>{{view==='plan'?'A bird’s-eye view of your collection':'A closer look at every bottle'}}</span><div v-if="!racksOnly" class="plan-tools"><button aria-label="Show floor plan" @click="view='plan'"><Map :size="17"/></button><button aria-label="Show racks" @click="view='racks'"><Grid2X2 :size="17"/></button></div></div>
-     <div v-if="!racksOnly && view==='plan'" class="planner-layout"><div class="plan-section"><div class="plan-caption"><span>{{cellar.room}}</span><span>Click a rack to explore</span></div><div class="floor-plan scalable-plan"><CellarPlan :room="cellar" :selected="selected" @select="selected=$event==='table'?selected:$event"/></div><div class="plan-legend"><span><i class="legend-box burgundy"></i> Wine rack</span><span><i class="legend-box gold-outline"></i> Selected rack</span><span><i class="legend-circle"></i> Tasting area</span><span class="plan-hint">Designed for a good vintage.</span></div></div>
-      <aside v-if="active" class="rack-detail"><div class="selected-label"><span>RACK DETAILS</span><span><i></i> SELECTED</span></div><div class="detail-heading"><span class="rack-letter">{{active.id}}</span><h2>{{active.wall}}</h2></div><button class="edit-selected-shelf" @click="editShelf(active)"><Pencil :size="13"/>Edit shelf</button><h3>{{active.name}}</h3><p class="grapes">{{active.grapes}}</p><div class="capacity-heading"><span>Rack occupancy</span><strong>{{count(active.id)}} <small>/ {{active.capacity}}</small></strong></div><div class="progress"><i :style="{width:count(active.id)/active.capacity*100+'%'}"></i></div><div class="capacity-foot"><span>{{Math.round(count(active.id)/active.capacity*100)}}% of capacity</span><span>{{active.capacity-count(active.id)}} spaces free</span></div><div class="mini-rack" :style="{'--rack-columns':active.columns}"><div class="mini-rack-heading"><span>FRONT VIEW</span><span>{{active.capacity}} SLOTS</span></div><div class="slot-labels"><span v-for="n in active.columns">{{String.fromCharCode(64+n)}}</span></div><div class="bottle-grid"><button v-for="slot in Math.min(active.columns*2,active.capacity)" :class="['bottle-slot',{filled:slotBottle(active.id,slot-1),white:active.color==='white',gold:active.color==='gold'}]" :aria-label="'Rack '+active.name+' slot '+slotAddress({rack:active.id,slot:slot-1})+' '+(slotBottle(active.id,slot-1)?.name || 'empty, add bottle')" @click="slotBottle(active.id,slot-1)?detail=slotBottle(active.id,slot-1):add(active.id,slot-1)"><span v-if="slotBottle(active.id,slot-1)" class="bottle-cork"></span><Plus v-else :size="15"/></button></div><p>Rows 1–2 of {{active.rows}} <span>Click a bottle for details</span></p></div><button class="primary open-rack" @click="view='racks';rackFilter=selected"><Grid2X2 :size="16"/>Explore this rack<ArrowRight :size="17"/></button></aside>
-     </div>
-     <div v-else class="racks-view"><div class="rack-tabs"><button :class="{active:rackFilter==='all'}" @click="rackFilter='all'">All racks ({{racks.length}})</button><button v-for="r in racks" :class="{active:rackFilter===r.id}" @click="rackFilter=r.id">Rack {{r.id}}</button></div><div class="rack-cards"><article v-for="r in racks.filter(r=>rackFilter==='all'||rackFilter===r.id)" class="rack-card"><div class="rack-card-heading"><div><span class="little-label">RACK {{r.id}} · {{r.wall}}</span><h2>{{r.name}}</h2></div><strong>{{count(r.id)}} / {{r.capacity}}</strong><button class="rack-edit-button" :aria-label="`Edit shelf ${r.id}`" @click="editShelf(r)"><Pencil :size="16"/></button></div><div class="large-rack" :style="{'--rack-columns':r.columns}"><div class="slot-labels"><span v-for="n in r.columns">{{String.fromCharCode(64+n)}}</span></div><div class="bottle-grid"><button v-for="slot in r.capacity" :class="['bottle-slot',{filled:slotBottle(r.id,slot-1),white:r.color==='white',gold:r.color==='gold'}]" :aria-label="'Rack '+r.name+' slot '+slotAddress({rack:r.id,slot:slot-1})+' '+(slotBottle(r.id,slot-1)?.name || 'empty, add bottle')" @click="slotBottle(r.id,slot-1)?detail=slotBottle(r.id,slot-1):add(r.id,slot-1)"><span v-if="slotBottle(r.id,slot-1)" class="bottle-cork"></span><Plus v-else :size="16"/></button></div></div></article></div></div>
-     <footer class="cellar-footer"><div><span class="footer-icon"><Layers :size="19"/></span><span>Total capacity <strong>{{bottles.length}} <small>/ {{totalCapacity}} bottles</small></strong></span></div><div class="footer-progress"><div><span>{{occupancy}}% occupied</span><span>{{totalCapacity-bottles.length}} spaces to grow</span></div><div class="progress"><i :style="{width:occupancy+'%'}"></i></div></div><button @click="section='Wine collection'">View collection<ArrowUpRight :size="16"/></button></footer>
-    </section>
-    </template><p v-if="!loaded && !error" class="empty" role="status">Loading your cellar...</p>
-    <footer v-if="repositoryUrl" class="app-footer"><a :href="repositoryUrl" target="_blank" rel="noopener noreferrer">WineVault on GitHub<ArrowUpRight :size="15"/></a></footer>
-   </main>
-  </div>
-  <AppDialog v-if="modal||detail||settings" :label="modal?'Add wine':detail?'Bottle details':'Cellar settings'" :busy="saving" :wide="!!detail" @close="closeDialog"><button class="close" aria-label="Close dialog" :disabled="saving" @click="modal=false;detail=null;settings=false"><X :size="21"/></button><template v-if="modal"><span class="eyebrow">MAKE ROOM FOR SOMETHING GOOD</span><h2>Add wine</h2><p>Give your next discovery a place in your cellar.</p><button class="manual-scan-entry" :disabled="saving" @click="openScanner"><ScanLine :size="17"/>Fill from a label photo</button><form @submit.prevent="save"><fieldset :disabled="saving" class="manual-wine-fields"><label>Wine name<input v-model="form.name" required maxlength="150" placeholder="e.g. Château Margaux"/></label><div class="form-row"><label>Vintage<input v-model="form.vintage" type="number" min="1900" :max="new Date().getFullYear()+1" required/></label><label>Wine type<select v-model="form.type"><option v-for="type in entryTypes" :key="type">{{type}}</option></select></label></div><label>Region<input v-model="form.region" required placeholder="e.g. Bordeaux, France"/></label><label>Rack<select v-model="form.rack" @change="chooseManualRack"><option v-for="r in racks" :value="r.id" :disabled="count(r.id)>=r.capacity">{{r.id}} — {{r.name}} ({{r.capacity-count(r.id)}} free)</option></select></label><PurchaseFields :draft="form"/><label>Number of bottles<input v-model.number="form.quantity" type="number" min="1" :max="freeSlots.length" step="1" required/></label>    <p v-if="form.quantity>freeSlots.length" class="scanner-error" role="alert">This shelf does not have enough free slots for that quantity.</p>
-    <div class="scanner-slot-heading"><span aria-live="polite">{{form.slots.length}} of {{form.quantity || 0}} slots selected</span><button type="button" class="text-button" :disabled="!Number.isInteger(form.quantity)||form.quantity<1||form.quantity>freeSlots.length" @click="autoPlacement=false;form.slots=freeSlots.slice(0,form.quantity);placementHint=''">Select first available</button></div>
-    <p v-if="placementHint" class="review-explanation" role="status">{{placementHint}}</p><p class="review-explanation">Select each slot where you placed a bottle.</p>
-    <div class="scanner-slots-scroll"><div class="scanner-slots" :style="{'--slot-columns':manualRack?.columns||6}" role="group" aria-label="Bottle slots">
-     <button v-for="n in manualRack?.capacity||0" :key="n" type="button" :aria-label="'Slot '+manualSlotLabel(n-1)+(!freeSlots.includes(n-1)?' occupied':'')" :aria-pressed="form.slots.includes(n-1)" :disabled="!freeSlots.includes(n-1)||(!form.slots.includes(n-1)&&form.slots.length>=form.quantity)" :class="{chosen:form.slots.includes(n-1),occupied:!freeSlots.includes(n-1)}" @click="toggleSlot(n-1)">{{manualSlotLabel(n-1)}}<Check v-if="form.slots.includes(n-1)" :size="13"/></button>
-    </div></div><p class="review-explanation">Filled slots are unavailable. Selected slots are highlighted.</p><p v-if="manualError" class="scanner-error" role="alert">{{manualError}}</p><button class="primary" :disabled="saving||!loaded||!validSlots">{{saving?'Saving…':'Add to cellar'}}<Plus :size="16"/></button></fieldset></form></template><template v-else-if="detail"><div class="detail-wine-icon"><Wine :size="45"/></div><span class="eyebrow">{{detail.type}} · {{detail.region}}</span><h2>{{detail.name}}</h2><p>Vintage {{detail.vintage || 'NV'}} · Rack {{detail.rack}} · Slot {{slotAddress(detail)}}</p><WineLocation :bottle="detail" :racks="racks" :bottles="bottles" :disabled="saving" @select="detail=$event"/><BottlePurchase :bottle="detail" @busy="saving=$event" @saved="detailsSaved"/><BottleEditor :bottle="detail" @busy="saving=$event" @saved="detailsSaved"/><DrinkingWindow :bottle="detail" @busy="saving=$event" @saved="detailsSaved"/><WineInformation :bottle="detail" @updated="refresh"/><MoveBottle :bottle="detail" :cellar="cellar" @busy="saving=$event" @moved="bottleMoved"/><button class="primary" :disabled="saving" @click="removeBottle">{{saving?'Updating…':'Mark as enjoyed'}}<Check :size="17"/></button></template><template v-else><span class="eyebrow">YOUR SPACE</span><h2>{{cellar?.name || 'Your cellar'}}</h2><p>Your cellar has {{racks.length}} racks, with space for {{totalCapacity}} bottles.</p><button class="editor-secondary" @click="settings=false;transferOpen=true">Import / export CSV</button><button class="editor-secondary" @click="settings=false;section='Purchases'">View purchases & spending</button><CellarPreferences :cellar="cellar" @busy="saving=$event" @saved="preferencesSaved"/><div v-if="!racksOnly" class="settings-list"><div><span>Room dimensions</span><strong>{{cellar.width.toFixed(2)}} × {{cellar.depth.toFixed(2)}} m</strong></div></div><button v-if="!racksOnly" class="primary" @click="settings=false;roomEditing=true">Edit room layout<Pencil :size="17"/></button><button class="primary" @click="settings=false;view='racks';section='My cellar';rackFilter='all'">Manage shelves<ArrowRight :size="17"/></button><ChangePassword/><button class="primary" @click="signOut"><LogOut :size="16"/>Sign out</button></template></AppDialog>
-  <CollectionTransfer v-if="transferOpen" :cellar="cellar" @close="transferOpen=false" @imported="collectionImported"/><WineScanner v-if="scannerOpen" :cellar="cellar" :preferred-rack="selected" @close="scannerOpen=false" @saved="scannerSaved"/><RoomEditor v-if="roomEditing" :cellar="cellar" @close="closeEditor" @saved="editorSaved"/><ShelfEditor v-if="shelfEditing" :cellar="cellar" :shelf="editingShelf" @close="closeEditor" @saved="editorSaved"/>
-  <div v-if="toast && !roomEditing && !shelfEditing && !scannerOpen" class="toast" role="status"><Check :size="17"/>{{toast}}<button v-if="toastUndo" @click="undoEnjoyed">Undo</button><button aria-label="Dismiss" @click="toast=''"><X :size="15"/></button></div>
- </div></AuthGate>
+            <PurchaseTracker
+              v-if="section === 'Purchases'"
+              :key="bottles.map((b) => b.id + ':' + b.revision).join(',')"
+              @select="selectPurchase"
+            />
+            <div v-else-if="section === 'History'" class="history-workspace">
+              <WineHistory :key="bottles.length" /><RestoreBottle
+                :key="bottles.length"
+                :cellar="cellar"
+                :preferred-id="undoId"
+                @restored="restored"
+              />
+            </div>
+            <section v-else-if="section === 'Wine collection'" class="collection panel">
+              <div class="collection-toolbar">
+                <h2>Every bottle, a story</h2>
+                <button class="editor-secondary" @click="transferOpen = true">
+                  Import / export CSV
+                </button>
+                <div class="search">
+                  <Search :size="17" /><input
+                    v-model="query"
+                    aria-label="Search wine, region, or vintage"
+                    placeholder="Search wine, region, vintage…"
+                  />
+                </div>
+              </div>
+              <div class="collection-filters">
+                <label
+                  >Type<select v-model="filter" aria-label="Type">
+                    <option value="all">All wines</option>
+                    <option
+                      v-for="type in ['Red', 'White', 'Rosé', 'Champagne', 'Sparkling', 'Dessert']"
+                      :key="type"
+                    >
+                      {{ type }}
+                    </option>
+                  </select></label
+                ><label
+                  >Rack<select v-model="collectionRack" aria-label="Rack">
+                    <option value="all">All racks</option>
+                    <option v-for="r in racks" :key="r.id" :value="r.id">{{ r.name }}</option>
+                  </select></label
+                ><label
+                  >Region<select v-model="regionFilter" aria-label="Region">
+                    <option value="all">All regions</option>
+                    <option v-for="region in regions" :key="region">{{ region }}</option>
+                  </select></label
+                ><label
+                  >Drinking window<select v-model="windowFilter" aria-label="Drinking window">
+                    <option value="all">All windows</option>
+                    <option
+                      v-for="status in [
+                        'Drink next',
+                        'Hold',
+                        'Ready',
+                        'Past your window',
+                        'Unknown',
+                      ]"
+                      :key="status"
+                    >
+                      {{ status }}
+                    </option>
+                  </select></label
+                ><label
+                  >Sort<select v-model="sort" aria-label="Sort">
+                    <option value="name">Wine name</option>
+                    <option value="vintage">Vintage, newest first</option>
+                    <option value="window">Window ending soonest</option>
+                  </select></label
+                ><label class="group-toggle"
+                  ><input v-model="grouped" type="checkbox" />Group matching wines</label
+                >
+              </div>
+              <div class="planner-summary">
+                <button class="editor-secondary" @click="showReminders">
+                  Drink next · {{ reminders.length }} bottles</button
+                ><span>Your chosen windows guide this list.</span>
+              </div>
+              <div class="wine-table">
+                <div class="table-head">
+                  <span>WINE</span><span>VINTAGE</span
+                  ><span>{{ grouped ? 'BOTTLES' : 'LOCATION' }}</span
+                  ><span>TYPE / WINDOW</span>
+                </div>
+                <button
+                  v-for="b in collectionRows"
+                  :key="b.id"
+                  @click="detail = bottles.find((item) => item.id === b.id)"
+                >
+                  <span
+                    ><Wine :size="19" /><span
+                      ><strong>{{ b.name }}</strong
+                      ><small>{{ b.region }}</small
+                      ><WineInfoBadge :bottle="b" /></span></span
+                  ><span>{{ b.vintage || 'NV' }}</span
+                  ><span>{{
+                    grouped
+                      ? b.quantity + ' bottles · View locations'
+                      : (racks.find((r) => r.id === b.rack)?.name || 'Rack ' + b.rack) +
+                        ' · ' +
+                        slotAddress(b)
+                  }}</span
+                  ><span class="window-cell"
+                    >{{ b.type
+                    }}<small :class="['window-badge', windowStatus(b) === 'Ready' ? 'ready' : '']"
+                      >{{ windowStatus(b)
+                      }}<template v-if="b.drinkStart != null">
+                        · {{ b.drinkStart }}–{{ b.drinkEnd }}</template
+                      ></small
+                    ></span
+                  >
+                </button>
+                <p v-if="!filtered.length" class="empty">
+                  No bottles found. Try another search or add your first wine.
+                </p>
+              </div>
+            </section>
+            <section v-else class="cellar-panel panel">
+              <div class="cellar-toolbar">
+                <div class="cellar-title">
+                  <span class="cellar-symbol"><Library :size="21" /></span>
+                  <div>
+                    <h2>{{ cellar?.name || 'Your cellar' }} <ChevronDown :size="15" /></h2>
+                    <span
+                      ><i class="green-dot"></i> Private cellar <b>·</b> {{ racks.length }} racks
+                      <b>·</b> {{ bottles.length }} bottles</span
+                    >
+                  </div>
+                </div>
+                <div class="cellar-edit-actions">
+                  <button class="subtle" @click="editShelf()"><Plus :size="16" />Add shelf</button
+                  ><button
+                    v-if="!racksOnly"
+                    class="subtle edit-room-button"
+                    @click="roomEditing = true"
+                  >
+                    <Pencil :size="16" />Edit room
+                  </button>
+                </div>
+              </div>
+              <div class="view-toolbar">
+                <div v-if="!racksOnly" class="segmented">
+                  <button :class="{ active: view === 'plan' }" @click="view = 'plan'">
+                    <Map :size="16" />Floor plan</button
+                  ><button :class="{ active: view === 'racks' }" @click="view = 'racks'">
+                    <Grid2X2 :size="16" />Rack view
+                  </button>
+                </div>
+                <span
+                  ><span class="live-dot"></span
+                  >{{
+                    view === 'plan'
+                      ? 'A bird’s-eye view of your collection'
+                      : 'A closer look at every bottle'
+                  }}</span
+                >
+                <div v-if="!racksOnly" class="plan-tools">
+                  <button aria-label="Show floor plan" @click="view = 'plan'">
+                    <Map :size="17" /></button
+                  ><button aria-label="Show racks" @click="view = 'racks'">
+                    <Grid2X2 :size="17" />
+                  </button>
+                </div>
+              </div>
+              <div v-if="!racksOnly && view === 'plan'" class="planner-layout">
+                <div class="plan-section">
+                  <div class="plan-caption">
+                    <span>{{ cellar.room }}</span
+                    ><span>Click a rack to explore</span>
+                  </div>
+                  <div class="floor-plan scalable-plan">
+                    <CellarPlan
+                      :room="cellar"
+                      :selected="selected"
+                      @select="selected = $event === 'table' ? selected : $event"
+                    />
+                  </div>
+                  <div class="plan-legend">
+                    <span><i class="legend-box burgundy"></i> Wine rack</span
+                    ><span><i class="legend-box gold-outline"></i> Selected rack</span
+                    ><span><i class="legend-circle"></i> Tasting area</span
+                    ><span class="plan-hint">Designed for a good vintage.</span>
+                  </div>
+                </div>
+                <aside v-if="active" class="rack-detail">
+                  <div class="selected-label">
+                    <span>RACK DETAILS</span><span><i></i> SELECTED</span>
+                  </div>
+                  <div class="detail-heading">
+                    <span class="rack-letter">{{ active.id }}</span>
+                    <h2>{{ active.wall }}</h2>
+                  </div>
+                  <button class="edit-selected-shelf" @click="editShelf(active)">
+                    <Pencil :size="13" />Edit shelf
+                  </button>
+                  <h3>{{ active.name }}</h3>
+                  <p class="grapes">{{ active.grapes }}</p>
+                  <div class="capacity-heading">
+                    <span>Rack occupancy</span
+                    ><strong
+                      >{{ count(active.id) }} <small>/ {{ active.capacity }}</small></strong
+                    >
+                  </div>
+                  <div class="progress">
+                    <i :style="{ width: (count(active.id) / active.capacity) * 100 + '%' }"></i>
+                  </div>
+                  <div class="capacity-foot">
+                    <span
+                      >{{ Math.round((count(active.id) / active.capacity) * 100) }}% of
+                      capacity</span
+                    ><span>{{ active.capacity - count(active.id) }} spaces free</span>
+                  </div>
+                  <div class="mini-rack" :style="{ '--rack-columns': active.columns }">
+                    <div class="mini-rack-heading">
+                      <span>FRONT VIEW</span><span>{{ active.capacity }} SLOTS</span>
+                    </div>
+                    <div class="slot-labels">
+                      <span v-for="n in active.columns">{{ String.fromCharCode(64 + n) }}</span>
+                    </div>
+                    <div class="bottle-grid">
+                      <button
+                        v-for="slot in Math.min(active.columns * 2, active.capacity)"
+                        :class="[
+                          'bottle-slot',
+                          {
+                            filled: slotBottle(active.id, slot - 1),
+                            white: active.color === 'white',
+                            gold: active.color === 'gold',
+                          },
+                        ]"
+                        :aria-label="
+                          'Rack ' +
+                          active.name +
+                          ' slot ' +
+                          slotAddress({ rack: active.id, slot: slot - 1 }) +
+                          ' ' +
+                          (slotBottle(active.id, slot - 1)?.name || 'empty, add bottle')
+                        "
+                        @click="
+                          slotBottle(active.id, slot - 1)
+                            ? (detail = slotBottle(active.id, slot - 1))
+                            : add(active.id, slot - 1)
+                        "
+                      >
+                        <span v-if="slotBottle(active.id, slot - 1)" class="bottle-cork"></span
+                        ><Plus v-else :size="15" />
+                      </button>
+                    </div>
+                    <p>Rows 1–2 of {{ active.rows }} <span>Click a bottle for details</span></p>
+                  </div>
+                  <button
+                    class="primary open-rack"
+                    @click="
+                      view = 'racks';
+                      rackFilter = selected;
+                    "
+                  >
+                    <Grid2X2 :size="16" />Explore this rack<ArrowRight :size="17" />
+                  </button>
+                </aside>
+              </div>
+              <div v-else class="racks-view">
+                <div class="rack-tabs">
+                  <button :class="{ active: rackFilter === 'all' }" @click="rackFilter = 'all'">
+                    All racks ({{ racks.length }})</button
+                  ><button
+                    v-for="r in racks"
+                    :class="{ active: rackFilter === r.id }"
+                    @click="rackFilter = r.id"
+                  >
+                    Rack {{ r.id }}
+                  </button>
+                </div>
+                <div class="rack-cards">
+                  <article
+                    v-for="r in racks.filter((r) => rackFilter === 'all' || rackFilter === r.id)"
+                    class="rack-card"
+                  >
+                    <div class="rack-card-heading">
+                      <div>
+                        <span class="little-label">RACK {{ r.id }} · {{ r.wall }}</span>
+                        <h2>{{ r.name }}</h2>
+                      </div>
+                      <strong>{{ count(r.id) }} / {{ r.capacity }}</strong
+                      ><button
+                        class="rack-edit-button"
+                        :aria-label="`Edit shelf ${r.id}`"
+                        @click="editShelf(r)"
+                      >
+                        <Pencil :size="16" />
+                      </button>
+                    </div>
+                    <div class="large-rack" :style="{ '--rack-columns': r.columns }">
+                      <div class="slot-labels">
+                        <span v-for="n in r.columns">{{ String.fromCharCode(64 + n) }}</span>
+                      </div>
+                      <div class="bottle-grid">
+                        <button
+                          v-for="slot in r.capacity"
+                          :class="[
+                            'bottle-slot',
+                            {
+                              filled: slotBottle(r.id, slot - 1),
+                              white: r.color === 'white',
+                              gold: r.color === 'gold',
+                            },
+                          ]"
+                          :aria-label="
+                            'Rack ' +
+                            r.name +
+                            ' slot ' +
+                            slotAddress({ rack: r.id, slot: slot - 1 }) +
+                            ' ' +
+                            (slotBottle(r.id, slot - 1)?.name || 'empty, add bottle')
+                          "
+                          @click="
+                            slotBottle(r.id, slot - 1)
+                              ? (detail = slotBottle(r.id, slot - 1))
+                              : add(r.id, slot - 1)
+                          "
+                        >
+                          <span v-if="slotBottle(r.id, slot - 1)" class="bottle-cork"></span
+                          ><Plus v-else :size="16" />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+              <footer class="cellar-footer">
+                <div>
+                  <span class="footer-icon"><Layers :size="19" /></span
+                  ><span
+                    >Total capacity
+                    <strong
+                      >{{ bottles.length }} <small>/ {{ totalCapacity }} bottles</small></strong
+                    ></span
+                  >
+                </div>
+                <div class="footer-progress">
+                  <div>
+                    <span>{{ occupancy }}% occupied</span
+                    ><span>{{ totalCapacity - bottles.length }} spaces to grow</span>
+                  </div>
+                  <div class="progress"><i :style="{ width: occupancy + '%' }"></i></div>
+                </div>
+                <button @click="section = 'Wine collection'">
+                  View collection<ArrowUpRight :size="16" />
+                </button>
+              </footer>
+            </section>
+          </template>
+          <p v-if="!loaded && !error" class="empty" role="status">Loading your cellar...</p>
+          <footer v-if="repositoryUrl" class="app-footer">
+            <a :href="repositoryUrl" target="_blank" rel="noopener noreferrer"
+              >WineVault on GitHub<ArrowUpRight :size="15"
+            /></a>
+          </footer>
+        </main>
+      </div>
+      <AppDialog
+        v-if="modal || detail || settings"
+        :label="modal ? 'Add wine' : detail ? 'Bottle details' : 'Cellar settings'"
+        :busy="saving"
+        :wide="!!detail"
+        @close="closeDialog"
+        ><button
+          class="close"
+          aria-label="Close dialog"
+          :disabled="saving"
+          @click="
+            modal = false;
+            detail = null;
+            settings = false;
+          "
+        >
+          <X :size="21" /></button
+        ><template v-if="modal"
+          ><span class="eyebrow">MAKE ROOM FOR SOMETHING GOOD</span>
+          <h2>Add wine</h2>
+          <p>Give your next discovery a place in your cellar.</p>
+          <button class="manual-scan-entry" :disabled="saving" @click="openScanner">
+            <ScanLine :size="17" />Fill from a label photo
+          </button>
+          <form @submit.prevent="save">
+            <fieldset :disabled="saving" class="manual-wine-fields">
+              <label
+                >Wine name<input
+                  v-model="form.name"
+                  required
+                  maxlength="150"
+                  placeholder="e.g. Château Margaux"
+              /></label>
+              <div class="form-row">
+                <label
+                  >Vintage<input
+                    v-model="form.vintage"
+                    type="number"
+                    min="1900"
+                    :max="new Date().getFullYear() + 1"
+                    required /></label
+                ><label
+                  >Wine type<select v-model="form.type">
+                    <option v-for="type in entryTypes" :key="type">{{ type }}</option>
+                  </select></label
+                >
+              </div>
+              <label
+                >Region<input
+                  v-model="form.region"
+                  required
+                  placeholder="e.g. Bordeaux, France" /></label
+              ><label
+                >Rack<select v-model="form.rack" @change="chooseManualRack">
+                  <option v-for="r in racks" :value="r.id" :disabled="count(r.id) >= r.capacity">
+                    {{ r.id }} — {{ r.name }} ({{ r.capacity - count(r.id) }} free)
+                  </option>
+                </select></label
+              ><PurchaseFields :draft="form" /><label
+                >Number of bottles<input
+                  v-model.number="form.quantity"
+                  type="number"
+                  min="1"
+                  :max="freeSlots.length"
+                  step="1"
+                  required
+              /></label>
+              <p v-if="form.quantity > freeSlots.length" class="scanner-error" role="alert">
+                This shelf does not have enough free slots for that quantity.
+              </p>
+              <div class="scanner-slot-heading">
+                <span aria-live="polite"
+                  >{{ form.slots.length }} of {{ form.quantity || 0 }} slots selected</span
+                ><button
+                  type="button"
+                  class="text-button"
+                  :disabled="
+                    !Number.isInteger(form.quantity) ||
+                    form.quantity < 1 ||
+                    form.quantity > freeSlots.length
+                  "
+                  @click="
+                    autoPlacement = false;
+                    form.slots = freeSlots.slice(0, form.quantity);
+                    placementHint = '';
+                  "
+                >
+                  Select first available
+                </button>
+              </div>
+              <p v-if="placementHint" class="review-explanation" role="status">
+                {{ placementHint }}
+              </p>
+              <p class="review-explanation">Select each slot where you placed a bottle.</p>
+              <div class="scanner-slots-scroll">
+                <div
+                  class="scanner-slots"
+                  :style="{ '--slot-columns': manualRack?.columns || 6 }"
+                  role="group"
+                  aria-label="Bottle slots"
+                >
+                  <button
+                    v-for="n in manualRack?.capacity || 0"
+                    :key="n"
+                    type="button"
+                    :aria-label="
+                      'Slot ' +
+                      manualSlotLabel(n - 1) +
+                      (!freeSlots.includes(n - 1) ? ' occupied' : '')
+                    "
+                    :aria-pressed="form.slots.includes(n - 1)"
+                    :disabled="
+                      !freeSlots.includes(n - 1) ||
+                      (!form.slots.includes(n - 1) && form.slots.length >= form.quantity)
+                    "
+                    :class="{
+                      chosen: form.slots.includes(n - 1),
+                      occupied: !freeSlots.includes(n - 1),
+                    }"
+                    @click="toggleSlot(n - 1)"
+                  >
+                    {{ manualSlotLabel(n - 1)
+                    }}<Check v-if="form.slots.includes(n - 1)" :size="13" />
+                  </button>
+                </div>
+              </div>
+              <p class="review-explanation">
+                Filled slots are unavailable. Selected slots are highlighted.
+              </p>
+              <p v-if="manualError" class="scanner-error" role="alert">{{ manualError }}</p>
+              <button class="primary" :disabled="saving || !loaded || !validSlots">
+                {{ saving ? 'Saving…' : 'Add to cellar' }}<Plus :size="16" />
+              </button>
+            </fieldset></form></template
+        ><template v-else-if="detail"
+          ><div class="detail-wine-icon"><Wine :size="45" /></div>
+          <span class="eyebrow">{{ detail.type }} · {{ detail.region }}</span>
+          <h2>{{ detail.name }}</h2>
+          <p>
+            Vintage {{ detail.vintage || 'NV' }} · Rack {{ detail.rack }} · Slot
+            {{ slotAddress(detail) }}
+          </p>
+          <WineLocation
+            :bottle="detail"
+            :racks="racks"
+            :bottles="bottles"
+            :disabled="saving"
+            @select="detail = $event" /><BottlePurchase
+            :bottle="detail"
+            @busy="saving = $event"
+            @saved="detailsSaved" /><BottleEditor
+            :bottle="detail"
+            @busy="saving = $event"
+            @saved="detailsSaved" /><DrinkingWindow
+            :bottle="detail"
+            @busy="saving = $event"
+            @saved="detailsSaved" /><WineInformation
+            :bottle="detail"
+            @updated="refresh" /><MoveBottle
+            :bottle="detail"
+            :cellar="cellar"
+            @busy="saving = $event"
+            @moved="bottleMoved" /><button class="primary" :disabled="saving" @click="removeBottle">
+            {{ saving ? 'Updating…' : 'Mark as enjoyed' }}<Check :size="17" /></button></template
+        ><template v-else
+          ><span class="eyebrow">YOUR SPACE</span>
+          <h2>{{ cellar?.name || 'Your cellar' }}</h2>
+          <p>
+            Your cellar has {{ racks.length }} racks, with space for {{ totalCapacity }} bottles.
+          </p>
+          <button
+            class="editor-secondary"
+            @click="
+              settings = false;
+              transferOpen = true;
+            "
+          >
+            Import / export CSV</button
+          ><button
+            class="editor-secondary"
+            @click="
+              settings = false;
+              section = 'Purchases';
+            "
+          >
+            View purchases & spending</button
+          ><CellarPreferences :cellar="cellar" @busy="saving = $event" @saved="preferencesSaved" />
+          <div v-if="!racksOnly" class="settings-list">
+            <div>
+              <span>Room dimensions</span
+              ><strong>{{ cellar.width.toFixed(2) }} × {{ cellar.depth.toFixed(2) }} m</strong>
+            </div>
+          </div>
+          <button
+            v-if="!racksOnly"
+            class="primary"
+            @click="
+              settings = false;
+              roomEditing = true;
+            "
+          >
+            Edit room layout<Pencil :size="17" /></button
+          ><button
+            class="primary"
+            @click="
+              settings = false;
+              view = 'racks';
+              section = 'My cellar';
+              rackFilter = 'all';
+            "
+          >
+            Manage shelves<ArrowRight :size="17" /></button
+          ><ChangePassword /><button class="primary" @click="signOut">
+            <LogOut :size="16" />Sign out
+          </button></template
+        ></AppDialog
+      >
+      <CollectionTransfer
+        v-if="transferOpen"
+        :cellar="cellar"
+        @close="transferOpen = false"
+        @imported="collectionImported"
+      /><WineScanner
+        v-if="scannerOpen"
+        :cellar="cellar"
+        :preferred-rack="selected"
+        @close="scannerOpen = false"
+        @saved="scannerSaved"
+      /><RoomEditor
+        v-if="roomEditing"
+        :cellar="cellar"
+        @close="closeEditor"
+        @saved="editorSaved"
+      /><ShelfEditor
+        v-if="shelfEditing"
+        :cellar="cellar"
+        :shelf="editingShelf"
+        @close="closeEditor"
+        @saved="editorSaved"
+      />
+      <div
+        v-if="toast && !roomEditing && !shelfEditing && !scannerOpen"
+        class="toast"
+        role="status"
+      >
+        <Check :size="17" />{{ toast }}<button v-if="toastUndo" @click="undoEnjoyed">Undo</button
+        ><button aria-label="Dismiss" @click="toast = ''"><X :size="15" /></button>
+      </div></div
+  ></AuthGate>
 </template>

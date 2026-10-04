@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func toolInput(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -67,9 +68,42 @@ func (s *Store) editBottle(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	// Re-link catalogue information only when the wine identity changes.
 	var changed bool
-	err := s.db.QueryRow(ctx, `WITH old AS (SELECT * FROM bottles WHERE id=$1 AND revision=$6 FOR UPDATE), updated AS (
- UPDATE bottles b SET name=$2,vintage=$3,region=$4,wine_type=$5,information_id=CASE WHEN bottle_wine_key(old.name,old.region,old.wine_type)=bottle_wine_key($2,$4,$5) THEN old.information_id ELSE NULL END
- FROM old WHERE b.id=old.id RETURNING bottle_wine_key(old.name,old.region,old.wine_type)<>bottle_wine_key($2,$4,$5) AS changed) SELECT changed FROM updated`, id, in.Name, in.Vintage, in.Region, in.Type, in.Revision).Scan(&changed)
+	err := s.db.QueryRow(ctx, `
+		WITH old AS (
+		    SELECT
+		        *
+		    FROM
+		        bottles
+		    WHERE
+		        id = $1
+		        AND revision = $6
+		    FOR UPDATE
+		),
+		updated AS (
+		    UPDATE
+		        bottles b
+		    SET
+		        name = $2,
+		        vintage = $3,
+		        region = $4,
+		        wine_type = $5,
+		        information_id = CASE WHEN bottle_wine_key (old.name, old.region, old.wine_type) = bottle_wine_key ($2, $4, $5) THEN
+		            old.information_id
+		        ELSE
+		            NULL
+		        END
+		    FROM
+		        old
+		    WHERE
+		        b.id = old.id
+		    RETURNING
+		        bottle_wine_key (old.name, old.region, old.wine_type) <> bottle_wine_key ($2, $4, $5) AS changed
+		)
+		SELECT
+		    changed
+		FROM
+		    updated
+	`, id, in.Name, in.Vintage, in.Region, in.Type, in.Revision).Scan(&changed)
 	if err != nil {
 		toolError(w, err)
 		return
@@ -111,7 +145,17 @@ func (s *Store) drinkingWindow(w http.ResponseWriter, r *http.Request) {
 	}
 	var key string
 	var vintage int
-	err = tx.QueryRow(ctx, `SELECT bottle_wine_key(name,region,wine_type),vintage FROM bottles WHERE id=$1 AND revision=$2 FOR UPDATE`, id, in.Revision).Scan(&key, &vintage)
+	err = tx.QueryRow(ctx, `
+		SELECT
+		    bottle_wine_key (name, region, wine_type),
+		    vintage
+		FROM
+		    bottles
+		WHERE
+		    id = $1
+		    AND revision = $2
+		FOR UPDATE
+	`, id, in.Revision).Scan(&key, &vintage)
 	if err != nil {
 		toolError(w, err)
 		return
@@ -122,7 +166,13 @@ func (s *Store) drinkingWindow(w http.ResponseWriter, r *http.Request) {
 		if in.Start == nil {
 			_, err = tx.Exec(ctx, `DELETE FROM drinking_windows WHERE wine_key=$1 AND vintage=$2`, key, vintage)
 		} else {
-			_, err = tx.Exec(ctx, `INSERT INTO drinking_windows VALUES($1,$2,$3,$4) ON CONFLICT(wine_key,vintage) DO UPDATE SET start_year=excluded.start_year,end_year=excluded.end_year`, key, vintage, *in.Start, *in.End)
+			_, err = tx.Exec(ctx, `
+		INSERT INTO drinking_windows
+		    VALUES ($1, $2, $3, $4)
+		ON CONFLICT (wine_key, vintage)
+		    DO UPDATE SET
+		        start_year = excluded.start_year, end_year = excluded.end_year
+	`, key, vintage, *in.Start, *in.End)
 		}
 	}
 	if err == nil {
@@ -137,7 +187,18 @@ func (s *Store) drinkingWindow(w http.ResponseWriter, r *http.Request) {
 func (s *Store) enjoyedBottles(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	rows, err := s.db.Query(ctx, `SELECT id::text,snapshot->>'name',snapshot->>'vintage',snapshot->>'rack_id',snapshot->>'slot' FROM enjoyed_bottles ORDER BY id DESC`)
+	rows, err := s.db.Query(ctx, `
+		SELECT
+		    id::text,
+		    SNAPSHOT ->> 'name',
+		    SNAPSHOT ->> 'vintage',
+		    SNAPSHOT ->> 'rack_id',
+		    SNAPSHOT ->> 'slot'
+		FROM
+		    enjoyed_bottles
+		ORDER BY
+		    id DESC
+	`)
 	if err != nil {
 		databaseError(w, err)
 		return
@@ -188,8 +249,24 @@ func (s *Store) restoreBottle(w http.ResponseWriter, r *http.Request) {
 		_, err = tx.Exec(ctx, `SELECT set_config('winevault.restoring','yes',true)`)
 	}
 	if err == nil {
-		_, err = tx.Exec(ctx, `INSERT INTO bottles(id,name,vintage,region,wine_type,rack_id,slot,barcode,information_id,revision,price_minor,currency,purchased_on,seller) OVERRIDING SYSTEM VALUE
- SELECT $1,b.name,b.vintage,b.region,b.wine_type,$2,$3,b.barcode,b.information_id,b.revision+1,b.price_minor,COALESCE(b.currency,''),b.purchased_on,COALESCE(b.seller,'') FROM jsonb_populate_record(NULL::bottles,$4::jsonb) b`, id, in.Rack, *in.Slot, string(snapshot))
+		_, err = tx.Exec(ctx, `
+		INSERT INTO bottles (id, name, vintage, region, wine_type, rack_id, slot, barcode, information_id, revision, price_minor, currency, purchased_on, seller) OVERRIDING SYSTEM VALUE
+		SELECT
+		    $1,
+		    b.name,
+		    b.vintage,
+		    b.region,
+		    b.wine_type,
+		    $2,
+		    $3,
+		    b.barcode,
+		    b.information_id,
+		    b.revision + 1,
+		    b.price_minor,
+		    COALESCE(b.currency, ''),b.purchased_on,COALESCE(b.seller,'')
+		FROM
+		    jsonb_populate_record(NULL::bottles, $4::jsonb) b
+	`, id, in.Rack, *in.Slot, string(snapshot))
 	}
 	if err == nil {
 		err = tx.Commit(ctx)

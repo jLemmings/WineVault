@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/jackc/pgx/v5"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var wineCategory = regexp.MustCompile(`(?i)(^|[^a-z])(wine|wines|vin|vins|wein|weine|vino|vini|champagne)([^a-z]|$)`)

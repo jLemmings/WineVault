@@ -57,7 +57,12 @@ func (s *Store) addBottleBatch(w http.ResponseWriter, r *http.Request) {
 	result := make([]Bottle, 0, len(input.Slots))
 	for _, slot := range input.Slots {
 		b.Slot = slot
-		err = tx.QueryRow(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot,barcode,price_minor,currency,purchased_on,seller) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,'')::date,$11) RETURNING id::text`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller).Scan(&b.ID)
+		err = tx.QueryRow(ctx, `
+		INSERT INTO bottles (name, vintage, region, wine_type, rack_id, slot, barcode, price_minor, currency, purchased_on, seller)
+		    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF ($10, '')::date, $11)
+		RETURNING
+		    id::text
+	`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller).Scan(&b.ID)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {

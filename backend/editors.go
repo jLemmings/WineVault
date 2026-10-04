@@ -235,7 +235,19 @@ func (s *Store) updateLayout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, err = tx.Exec(ctx, "UPDATE cellars SET name=$1,room_name=$2,width_m=$3,depth_m=$4,layout=$5,revision=revision+1 WHERE id=$6", strings.TrimSpace(input.Name), strings.TrimSpace(input.Room), input.Width, input.Depth, input.Layout, c.ID)
+	_, err = tx.Exec(ctx, `
+		UPDATE
+		    cellars
+		SET
+		    name = $1,
+		    room_name = $2,
+		    width_m = $3,
+		    depth_m = $4,
+		    layout = $5,
+		    revision = revision + 1
+		WHERE
+		    id = $6
+	`, strings.TrimSpace(input.Name), strings.TrimSpace(input.Room), input.Width, input.Depth, input.Layout, c.ID)
 	if err == nil {
 		err = tx.Commit(ctx)
 	}
@@ -310,7 +322,22 @@ func (s *Store) updateRack(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "This would remove occupied slots. Keep a larger shelf or empty those slots first. No bottles were changed.", 409)
 		return
 	}
-	_, err = tx.Exec(ctx, "UPDATE racks SET name=$1,short_name=$2,wall=$3,grapes=$4,temperature=$5,color=$6,rows=$7,columns=$8,capacity=$9 WHERE id=$10", input.Name, input.Short, input.Wall, input.Grapes, input.Temp, input.Color, input.Rows, input.Columns, capacity, id)
+	_, err = tx.Exec(ctx, `
+		UPDATE
+		    racks
+		SET
+		    name = $1,
+		    short_name = $2,
+		    wall = $3,
+		    grapes = $4,
+		    temperature = $5,
+		    color = $6,
+		    ROWS = $7,
+		    columns = $8,
+		    capacity = $9
+		WHERE
+		    id = $10
+	`, input.Name, input.Short, input.Wall, input.Grapes, input.Temp, input.Color, input.Rows, input.Columns, capacity, id)
 	if err == nil {
 		_, err = tx.Exec(ctx, "DELETE FROM rack_slots WHERE rack_id=$1 AND slot >= $2", id, capacity)
 	}
@@ -396,7 +423,10 @@ func (s *Store) createRack(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No space for a new shelf. Move shelves or enlarge the room in the room editor first.", 409)
 		return
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO racks(id,cellar_id,name,short_name,wall,grapes,temperature,capacity,color,position,rows,columns,x,y,width_m,depth_m,rotation) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,0)`, id, c.ID, input.Name, input.Short, input.Wall, input.Grapes, input.Temp, input.Rows*input.Columns, input.Color, position, input.Rows, input.Columns, rack.X, rack.Y, rack.Width, rack.Depth)
+	_, err = tx.Exec(ctx, `
+		INSERT INTO racks (id, cellar_id, name, short_name, wall, grapes, temperature, capacity, color, position, ROWS, columns, x, y, width_m, depth_m, rotation)
+		    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 0)
+	`, id, c.ID, input.Name, input.Short, input.Wall, input.Grapes, input.Temp, input.Rows*input.Columns, input.Color, position, input.Rows, input.Columns, rack.X, rack.Y, rack.Width, rack.Depth)
 	if err == nil {
 		_, err = tx.Exec(ctx, "INSERT INTO rack_slots SELECT $1,generate_series(0,$2::integer-1)", id, input.Rows*input.Columns)
 	}
@@ -461,8 +491,22 @@ func (s *Store) deleteRack(w http.ResponseWriter, r *http.Request) {
 		_, err = tx.Exec(ctx, "DELETE FROM racks WHERE id=$1", id)
 	}
 	if err == nil {
-		_, err = tx.Exec(ctx, `UPDATE cellars SET revision=revision+1,preferences=jsonb_set(preferences,'{typeRacks}',
- COALESCE((SELECT jsonb_object_agg(key,CASE WHEN value=$2 THEN '' ELSE value END) FROM jsonb_each_text(preferences->'typeRacks')),'{}'::jsonb)) WHERE id=$1`, c.ID, id)
+		_, err = tx.Exec(ctx, `
+		UPDATE
+		    cellars
+		SET
+		    revision = revision + 1,
+		    preferences = jsonb_set(preferences, '{typeRacks}', COALESCE((
+		            SELECT
+		                jsonb_object_agg(key, CASE WHEN value = $2 THEN
+		                        ''
+		                    ELSE
+		                        value
+		                    END)
+		            FROM jsonb_each_text(preferences -> 'typeRacks')), '{}'::jsonb))
+		WHERE
+		    id = $1
+	`, c.ID, id)
 	}
 	if err == nil {
 		err = tx.Commit(ctx)

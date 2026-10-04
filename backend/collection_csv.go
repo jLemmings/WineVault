@@ -5,12 +5,13 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var csvColumns = []string{"name", "vintage", "region", "type", "quantity", "rack", "slot", "barcode", "price", "currency", "purchase_date", "seller"}
@@ -303,7 +304,10 @@ func (s *Store) importCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 	for _, b := range input.Bottles {
-		_, err = tx.Exec(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot,barcode,price_minor,currency,purchased_on,seller) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,'')::date,$11)`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller)
+		_, err = tx.Exec(ctx, `
+		INSERT INTO bottles (name, vintage, region, wine_type, rack_id, slot, barcode, price_minor, currency, purchased_on, seller)
+		    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF ($10, '')::date, $11)
+	`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller)
 		if err != nil {
 			toolError(w, err)
 			return

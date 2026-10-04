@@ -1,14 +1,122 @@
 <script setup>
-const props=defineProps({cellar:Object,preferredId:String}),emit=defineEmits(['restored'])
-const entries=ref([]),id=ref(''),rack=ref(''),slot=ref(''),error=ref(''),busy=ref(false),loading=ref(false)
-const selectedRack=computed(()=>props.cellar.racks.find(r=>r.id===rack.value))
-const free=computed(()=>Array.from({length:selectedRack.value?.capacity||0},(_,i)=>i).filter(n=>!props.cellar.bottles.some(b=>b.rack===rack.value&&b.slot===n)))
-const label=n=>`${String.fromCharCode(65+n%(selectedRack.value?.columns||6))}${Math.floor(n/(selectedRack.value?.columns||6))+1}`
-watch(rack,()=>slot.value='')
-watch(free,()=>{if(!free.value.includes(Number(slot.value)))slot.value=''})
-async function load(){loading.value=true;error.value='';try{entries.value=await $fetch('/api/enjoyed');id.value=entries.value.some(b=>b.id===props.preferredId)?props.preferredId:entries.value[0]?.id||'';rack.value=props.cellar.racks[0]?.id||''}catch{error.value='Could not load recoverable bottles.'}finally{loading.value=false}}
-async function restore(){if(slot.value==='')return;busy.value=true;error.value='';try{await $fetch(`/api/bottles/${id.value}/restore`,{method:'POST',body:{rack:rack.value,slot:Number(slot.value)},retry:0});emit('restored');await load()}catch(e){error.value=typeof e.data==='string'?e.data:'Could not restore bottle.'}finally{busy.value=false}}
-onMounted(load)
+  const props = defineProps({ cellar: Object, preferredId: String }),
+    emit = defineEmits(['restored']);
+  const entries = ref([]),
+    id = ref(''),
+    rack = ref(''),
+    slot = ref(''),
+    error = ref(''),
+    busy = ref(false),
+    loading = ref(false);
+  const selectedRack = computed(() => props.cellar.racks.find((r) => r.id === rack.value));
+  const free = computed(() =>
+    Array.from({ length: selectedRack.value?.capacity || 0 }, (_, i) => i).filter(
+      (n) => !props.cellar.bottles.some((b) => b.rack === rack.value && b.slot === n),
+    ),
+  );
+  const label = (n) =>
+    `${String.fromCharCode(65 + (n % (selectedRack.value?.columns || 6)))}${Math.floor(n / (selectedRack.value?.columns || 6)) + 1}`;
+  watch(rack, () => (slot.value = ''));
+  watch(free, () => {
+    if (!free.value.includes(Number(slot.value))) slot.value = '';
+  });
+  async function load() {
+    loading.value = true;
+    error.value = '';
+    try {
+      entries.value = await $fetch('/api/enjoyed');
+      id.value = entries.value.some((b) => b.id === props.preferredId)
+        ? props.preferredId
+        : entries.value[0]?.id || '';
+      rack.value = props.cellar.racks[0]?.id || '';
+    } catch {
+      error.value = 'Could not load recoverable bottles.';
+    } finally {
+      loading.value = false;
+    }
+  }
+  async function restore() {
+    if (slot.value === '') return;
+    busy.value = true;
+    error.value = '';
+    try {
+      await $fetch(`/api/bottles/${id.value}/restore`, {
+        method: 'POST',
+        body: { rack: rack.value, slot: Number(slot.value) },
+        retry: 0,
+      });
+      emit('restored');
+      await load();
+    } catch (e) {
+      error.value = typeof e.data === 'string' ? e.data : 'Could not restore bottle.';
+    } finally {
+      busy.value = false;
+    }
+  }
+  onMounted(load);
 </script>
-<template><section class="panel recovery-panel" aria-label="Recover enjoyed bottles"><h2>Undo an enjoyed bottle</h2><p>Restore an accidental removal to any available slot. Recovery is available for bottles enjoyed after this update.</p><p v-if="loading" role="status">Loading recoverable bottles…</p><form v-else-if="entries.length" @submit.prevent="restore"><fieldset :disabled="busy"><label>Bottle<select v-model="id" aria-label="Bottle"><option v-for="b in entries" :key="b.id" :value="b.id">{{b.name}} · {{b.vintage==='0'?'NV':b.vintage}}</option></select></label><label>Destination rack<select v-model="rack" aria-label="Destination rack"><option v-for="r in cellar.racks" :key="r.id" :value="r.id">{{r.name}}</option></select></label><label>Empty slot<select v-model="slot" aria-label="Empty slot" required><option value="" disabled>Choose a free slot</option><option v-for="n in free" :key="n" :value="n">{{label(n)}}</option></select></label><p v-if="!free.length">No free slots in this rack.</p><button class="primary" :disabled="slot===''||!id">{{busy?'Restoring…':'Restore bottle'}}</button></fieldset></form><p v-else>No bottles available to restore.</p><p v-if="error" class="scanner-error" role="alert">{{error}} <button @click="load">Reload</button></p></section></template>
-<style scoped>.recovery-panel{margin-top:20px;padding:24px}.recovery-panel p{font-size:13px;line-height:1.6;margin:12px 0;color:#857b70}fieldset{border:0;padding:0;display:flex;gap:16px;flex-wrap:wrap;align-items:end}label{flex:1;min-width:150px}button.primary{margin:0}</style>
+<template>
+  <section class="panel recovery-panel" aria-label="Recover enjoyed bottles">
+    <h2>Undo an enjoyed bottle</h2>
+    <p>
+      Restore an accidental removal to any available slot. Recovery is available for bottles enjoyed
+      after this update.
+    </p>
+    <p v-if="loading" role="status">Loading recoverable bottles…</p>
+    <form v-else-if="entries.length" @submit.prevent="restore">
+      <fieldset :disabled="busy">
+        <label
+          >Bottle<select v-model="id" aria-label="Bottle">
+            <option v-for="b in entries" :key="b.id" :value="b.id">
+              {{ b.name }} · {{ b.vintage === '0' ? 'NV' : b.vintage }}
+            </option>
+          </select></label
+        ><label
+          >Destination rack<select v-model="rack" aria-label="Destination rack">
+            <option v-for="r in cellar.racks" :key="r.id" :value="r.id">{{ r.name }}</option>
+          </select></label
+        ><label
+          >Empty slot<select v-model="slot" aria-label="Empty slot" required>
+            <option value="" disabled>Choose a free slot</option>
+            <option v-for="n in free" :key="n" :value="n">{{ label(n) }}</option>
+          </select></label
+        >
+        <p v-if="!free.length">No free slots in this rack.</p>
+        <button class="primary" :disabled="slot === '' || !id">
+          {{ busy ? 'Restoring…' : 'Restore bottle' }}
+        </button>
+      </fieldset>
+    </form>
+    <p v-else>No bottles available to restore.</p>
+    <p v-if="error" class="scanner-error" role="alert">
+      {{ error }} <button @click="load">Reload</button>
+    </p>
+  </section>
+</template>
+<style scoped>
+  .recovery-panel {
+    margin-top: 20px;
+    padding: 24px;
+  }
+  .recovery-panel p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 12px 0;
+    color: #857b70;
+  }
+  fieldset {
+    border: 0;
+    padding: 0;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: end;
+  }
+  label {
+    flex: 1;
+    min-width: 150px;
+  }
+  button.primary {
+    margin: 0;
+  }
+</style>

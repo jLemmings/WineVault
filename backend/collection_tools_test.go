@@ -62,7 +62,12 @@ func TestCollectionTools(t *testing.T) {
 	}
 	// A matching bottle shares the window while other vintages do not.
 	var otherID string
-	if err := pool.QueryRow(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot) VALUES($1,$2,$3,$4,'B',24) RETURNING id::text`, b.Name, b.Vintage, b.Region, b.Type).Scan(&otherID); err != nil {
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO bottles (name, vintage, region, wine_type, rack_id, slot)
+		    VALUES ($1, $2, $3, $4, 'B', 24)
+		RETURNING
+		    id::text
+	`, b.Name, b.Vintage, b.Region, b.Type).Scan(&otherID); err != nil {
 		t.Fatal(err)
 	}
 	for _, other := range list() {

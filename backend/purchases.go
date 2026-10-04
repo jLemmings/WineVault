@@ -55,7 +55,20 @@ func (s *Store) updatePurchase(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	var revision int
-	err := s.db.QueryRow(ctx, `UPDATE bottles SET price_minor=$1,currency=$2,purchased_on=NULLIF($3,'')::date,seller=$4 WHERE id=$5 AND revision=$6 RETURNING revision`, input.PriceMinor, input.Currency, input.PurchaseDate, input.Seller, id, input.Revision).Scan(&revision)
+	err := s.db.QueryRow(ctx, `
+		UPDATE
+		    bottles
+		SET
+		    price_minor = $1,
+		    currency = $2,
+		    purchased_on = NULLIF ($3, '')::date,
+		    seller = $4
+		WHERE
+		    id = $5
+		    AND revision = $6
+		RETURNING
+		    revision
+	`, input.PriceMinor, input.Currency, input.PurchaseDate, input.Seller, id, input.Revision).Scan(&revision)
 	if err != nil {
 		toolError(w, err)
 		return
@@ -65,7 +78,15 @@ func (s *Store) updatePurchase(w http.ResponseWriter, r *http.Request) {
 func (s *Store) purchaseHistory(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	rows, err := s.db.Query(ctx, `SELECT p.bottle_id::text,p.name,p.vintage,p.price_minor,p.currency,COALESCE(p.purchased_on::text,''),p.seller,b.id IS NOT NULL FROM wine_purchases p LEFT JOIN bottles b ON b.id=p.bottle_id WHERE p.price_minor IS NOT NULL OR p.purchased_on IS NOT NULL OR p.seller<>'' ORDER BY p.purchased_on DESC NULLS LAST,p.bottle_id DESC`)
+	rows, err := s.db.Query(ctx, `
+		SELECT
+		    p.bottle_id::text,
+		    p.name,
+		    p.vintage,
+		    p.price_minor,
+		    p.currency,
+		    COALESCE(p.purchased_on::text, ''),p.seller,b.id IS NOT NULL FROM wine_purchases p LEFT JOIN bottles b ON b.id=p.bottle_id WHERE p.price_minor IS NOT NULL OR p.purchased_on IS NOT NULL OR p.seller<>'' ORDER BY p.purchased_on DESC NULLS LAST, p.bottle_id DESC
+	`)
 	if err != nil {
 		databaseError(w, err)
 		return

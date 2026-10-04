@@ -32,7 +32,24 @@ func (s *Store) moveBottle(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	var b Bottle
-	err = s.db.QueryRow(ctx, `UPDATE bottles SET rack_id=$1,slot=$2 WHERE id=$3 RETURNING id::text,name,vintage,region,wine_type,rack_id,slot,barcode`, input.Rack, *input.Slot, id).Scan(&b.ID, &b.Name, &b.Vintage, &b.Region, &b.Type, &b.Rack, &b.Slot, &b.Barcode)
+	err = s.db.QueryRow(ctx, `
+		UPDATE
+		    bottles
+		SET
+		    rack_id = $1,
+		    slot = $2
+		WHERE
+		    id = $3
+		RETURNING
+		    id::text,
+		    name,
+		    vintage,
+		    region,
+		    wine_type,
+		    rack_id,
+		    slot,
+		    barcode
+	`, input.Rack, *input.Slot, id).Scan(&b.ID, &b.Name, &b.Vintage, &b.Region, &b.Type, &b.Rack, &b.Slot, &b.Barcode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "This bottle is no longer in your cellar.", 404)
 		return

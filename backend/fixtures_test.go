@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,7 +26,15 @@ func migrateFixture(ctx context.Context, pool *pgxpool.Pool, legacyPath string) 
 			return err
 		}
 		defer tx.Rollback(ctx)
-		if _, err = tx.Exec(ctx, initialSchema+"DELETE FROM cellars;"+legacyLayout+initialSeed+`CREATE TABLE schema_migrations(version integer PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now()); INSERT INTO schema_migrations(version) VALUES(1);`); err != nil {
+		if _, err = tx.Exec(ctx, initialSchema+"DELETE FROM cellars;"+legacyLayout+initialSeed+`
+		CREATE TABLE schema_migrations (
+		    version integer PRIMARY KEY,
+		    applied_at timestamptz NOT NULL DEFAULT now()
+		);
+
+		INSERT INTO schema_migrations (version)
+		    VALUES (1);
+	`); err != nil {
 			return err
 		}
 		if err = tx.Commit(ctx); err != nil {

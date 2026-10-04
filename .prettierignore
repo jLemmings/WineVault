@@ -1,0 +1,11 @@
+**/node_modules/**
+**/.nuxt/**
+**/.output/**
+**/.cache/**
+.git/**
+backend/data/**
+**/package-lock.json
+**/go.sum
+.env
+.env.*
+!**/.env.example

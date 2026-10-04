@@ -4,10 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 type Bottle struct {
@@ -91,12 +92,51 @@ func (s *Store) cellar(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 	c := Cellar{Racks: []Rack{}, Bottles: []Bottle{}}
-	err = tx.QueryRow(ctx, "SELECT id,name,owner_name,room_name,width_m,depth_m,revision,layout,preferences FROM cellars ORDER BY id LIMIT 1").Scan(&c.ID, &c.Name, &c.Owner, &c.Room, &c.Width, &c.Depth, &c.Revision, &c.Layout, &c.Preferences)
+	err = tx.QueryRow(ctx, `
+		SELECT
+		    id,
+		    name,
+		    owner_name,
+		    room_name,
+		    width_m,
+		    depth_m,
+		    revision,
+		    layout,
+		    preferences
+		FROM
+		    cellars
+		ORDER BY
+		    id
+		LIMIT 1
+	`).Scan(&c.ID, &c.Name, &c.Owner, &c.Room, &c.Width, &c.Depth, &c.Revision, &c.Layout, &c.Preferences)
 	if err != nil {
 		databaseError(w, err)
 		return
 	}
-	rows, err := tx.Query(ctx, "SELECT id,name,short_name,wall,grapes,temperature,capacity,color,rows,columns,x,y,width_m,depth_m,rotation FROM racks WHERE cellar_id=$1 ORDER BY position", c.ID)
+	rows, err := tx.Query(ctx, `
+		SELECT
+		    id,
+		    name,
+		    short_name,
+		    wall,
+		    grapes,
+		    temperature,
+		    capacity,
+		    color,
+		    ROWS,
+		    columns,
+		    x,
+		    y,
+		    width_m,
+		    depth_m,
+		    rotation
+		FROM
+		    racks
+		WHERE
+		    cellar_id = $1
+		ORDER BY
+		    position
+	`, c.ID)
 	if err != nil {
 		databaseError(w, err)
 		return
@@ -133,7 +173,30 @@ type querier interface {
 }
 
 func queryBottles(ctx context.Context, db querier, cellarID string) ([]Bottle, error) {
-	rows, err := db.Query(ctx, `SELECT b.id::text,b.name,b.vintage,b.region,b.wine_type,b.rack_id,b.slot,b.barcode,COALESCE(i.status,'not_fetched'),COALESCE(i.payload IS NOT NULL AND i.fetched_at IS NOT NULL,false),b.revision,d.start_year,d.end_year,b.price_minor,b.currency,COALESCE(b.purchased_on::text,''),b.seller FROM bottles b JOIN racks r ON r.id=b.rack_id LEFT JOIN wine_information i ON i.id=b.information_id LEFT JOIN drinking_windows d ON d.wine_key=bottle_wine_key(b.name,b.region,b.wine_type) AND d.vintage=b.vintage WHERE ($1='' OR r.cellar_id=$1) ORDER BY r.position,b.slot`, cellarID)
+	rows, err := db.Query(ctx, `
+		SELECT
+		    b.id::text,
+		    b.name,
+		    b.vintage,
+		    b.region,
+		    b.wine_type,
+		    b.rack_id,
+		    b.slot,
+		    b.barcode,
+		    COALESCE(i.status, 'not_fetched'),
+		    COALESCE(i.payload IS NOT NULL
+		        AND i.fetched_at IS NOT NULL, FALSE),
+		    b.revision,
+		    d.start_year,
+		    d.end_year,
+		    b.price_minor,
+		    b.currency,
+		    COALESCE(b.purchased_on::text, ''),b.seller FROM bottles b JOIN racks r ON r.id=b.rack_id LEFT JOIN wine_information i ON i.id=b.information_id LEFT JOIN drinking_windows d ON d.wine_key=bottle_wine_key(b.name,b.region,b.wine_type) AND d.vintage=b.vintage WHERE ($1=''
+		        OR r.cellar_id = $1)
+		ORDER BY
+		    r.position,
+		    b.slot
+	`, cellarID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +247,12 @@ func (s *Store) bottles(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid bottle details", 400)
 			return
 		}
-		err := s.db.QueryRow(ctx, `INSERT INTO bottles(name,vintage,region,wine_type,rack_id,slot,barcode,price_minor,currency,purchased_on,seller) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,'')::date,$11) RETURNING id::text`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller).Scan(&b.ID)
+		err := s.db.QueryRow(ctx, `
+		INSERT INTO bottles (name, vintage, region, wine_type, rack_id, slot, barcode, price_minor, currency, purchased_on, seller)
+		    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF ($10, '')::date, $11)
+		RETURNING
+		    id::text
+	`, b.Name, b.Vintage, b.Region, b.Type, b.Rack, b.Slot, b.Barcode, b.PriceMinor, b.Currency, b.PurchaseDate, b.Seller).Scan(&b.ID)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
