@@ -56,6 +56,8 @@ let additions = 0;
 await page.route('**/api/**', async (route) => {
   const req = route.request(),
     path = new URL(req.url()).pathname;
+  if (path === '/api/history') return route.fulfill({ json: { entries: [], nextCursor: null } });
+  if (path === '/api/purchases' || path === '/api/enjoyed') return route.fulfill({ json: [] });
   if (path === '/api/auth/status')
     return route.fulfill({
       json: { authenticated: true, setupRequired: false, username: 'Owner' },
@@ -94,6 +96,48 @@ await page.route('**/api/**', async (route) => {
 });
 try {
   await page.goto(base);
+  const profile = page.getByRole('button', { name: 'My profile', exact: true });
+  await expect(profile).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    page.locator('.topbar').getByRole('button', { name: 'Cellar settings', exact: true }),
+  ).toHaveCount(0);
+  await profile.click();
+  await expect(profile).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(profile).toBeFocused();
+  await expect(profile).toHaveAttribute('aria-expanded', 'false');
+  await profile.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Cellar settings', exact: true })).toBeFocused();
+  await page.locator('.page-heading h1').click();
+  await expect(profile).toHaveAttribute('aria-expanded', 'false');
+  for (const width of [320, 390, 680]) {
+    await page.setViewportSize({ width, height: 844 });
+    const profileBox = await profile.boundingBox();
+    assert.ok(profileBox.width >= 44 && profileBox.height >= 44);
+    assert.ok(profileBox.y < 20 && profileBox.x + profileBox.width >= width - 20);
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+    for (const name of ['My cellar', 'Wine collection', 'History', 'Purchases']) {
+      const tab = navigation.getByRole('button', { name, exact: true });
+      const box = await tab.boundingBox();
+      assert.ok(box.width >= 44 && box.height >= 44 && box.y > 700);
+      await tab.click();
+      await expect(tab).toHaveAttribute('aria-current', 'page');
+    }
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+      false,
+    );
+  }
+  await page.getByRole('button', { name: 'My cellar', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await profile.click();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await expect(profile).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.breadcrumb strong')).toHaveText('Wine collection');
+  await page.getByRole('button', { name: 'My cellar', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
   await page.getByRole('button', { name: 'Preferences', exact: true }).click();
   let settings = page.getByRole('dialog', { name: 'Cellar settings' });
   await settings.getByLabel('Cellar view', { exact: true }).selectOption('racks-only');
@@ -179,6 +223,7 @@ try {
   await expect(dialog.locator('select').nth(1)).not.toHaveValue('C');
   await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'My profile', exact: true }).click();
   await page.getByRole('button', { name: 'Cellar settings', exact: true }).click();
   settings = page.getByRole('dialog', { name: 'Cellar settings' });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

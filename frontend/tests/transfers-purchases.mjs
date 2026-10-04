@@ -194,6 +194,7 @@ try {
   await expect(tracker.getByRole('heading', { name: /27\.85/ })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.getByRole('button', { name: 'My profile', exact: true }).click();
   await page.getByRole('button', { name: 'Cellar settings', exact: true }).click();
   await page.getByRole('button', { name: 'Import / export CSV', exact: true }).click();
   await expect(dialog).toBeVisible();

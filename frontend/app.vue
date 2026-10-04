@@ -12,7 +12,6 @@
     ArrowUpRight,
     ArrowRight,
     Search,
-    Bell,
     Settings2,
     Droplets,
     Check,
@@ -407,19 +406,24 @@
           ><span class="brand-icon"><Wine :size="23" /></span> Wine<span>Vault</span><i>®</i></a
         >
         <div class="workspace-label">YOUR PERSONAL COLLECTION</div>
-        <nav>
+        <nav aria-label="Main navigation">
           <button
             v-for="item in [
-              { name: 'My cellar', icon: Library },
-              { name: 'Wine collection', icon: Wine },
-              { name: 'History', icon: History },
-              { name: 'Purchases', icon: Wallet },
+              { name: 'My cellar', mobile: 'Cellar', icon: Library },
+              { name: 'Wine collection', mobile: 'Wines', icon: Wine },
+              { name: 'History', mobile: 'History', icon: History },
+              { name: 'Purchases', mobile: 'Purchases', icon: Wallet },
             ]"
+            :key="item.name"
+            :aria-label="item.name"
+            :aria-current="section === item.name ? 'page' : undefined"
             :class="{ current: section === item.name }"
             @click="section = item.name"
           >
-            <component :is="item.icon" :size="19" />{{ item.name
-            }}<span v-if="item.name === 'Wine collection'" class="nav-count">{{
+            <component :is="item.icon" :size="19" />
+            <span class="nav-label">{{ item.name }}</span>
+            <span class="mobile-nav-label">{{ item.mobile }}</span>
+            <span v-if="item.name === 'Wine collection'" class="nav-count">{{
               bottles.length
             }}</span>
           </button>
@@ -443,13 +447,16 @@
             Workspace <span>/</span> <strong>{{ section }}</strong>
           </div>
           <div class="top-actions">
-            <span class="today">A little more organized. A little more enjoyed.</span
-            ><button aria-label="Cellar settings" :disabled="!loaded" @click="settings = true">
-              <Settings2 :size="18" /></button
-            ><button aria-label="Notifications" @click="showReminders">
-              <Bell :size="18" /><i v-if="reminders.length"></i></button
-            ><button aria-label="Sign out" @click="signOut"><LogOut :size="18" /></button>
-            <div class="avatar small">{{ ownerInitials }}</div>
+            <span class="today">A little more organized. A little more enjoyed.</span>
+            <ProfileMenu
+              :initials="ownerInitials"
+              :owner="cellar?.owner || 'Personal cellar'"
+              :loaded="loaded"
+              :notification-count="reminders.length"
+              @settings="settings = true"
+              @notifications="showReminders"
+              @sign-out="signOut"
+            />
           </div>
         </header>
         <main>

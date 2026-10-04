@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -94,6 +94,7 @@ try {
   await page.getByRole('alert').waitFor();
   await page.getByLabel('Password', { exact: true }).fill('replacement-password-123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'My profile', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('heading', { name: 'Welcome back' }).waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
