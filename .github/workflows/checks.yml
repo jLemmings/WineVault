@@ -1,0 +1,151 @@
+name: Lint and tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Formatting and static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - name: Check Go formatting
+        working-directory: backend
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            echo 'Run gofmt on the files above.'
+            exit 1
+          fi
+      - run: go vet ./...
+        working-directory: backend
+
+  backend:
+    name: Backend tests with PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: winevault_ci
+          POSTGRES_USER: winevault
+          POSTGRES_PASSWORD: winevault_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U winevault -d winevault_ci"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Run unit and database integration tests
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgres://winevault:winevault_ci@127.0.0.1:5432/winevault_ci?sslmode=disable
+        run: go test -race -count=1 ./...
+
+  frontend:
+    name: Frontend build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: winevault_ci
+          POSTGRES_USER: winevault
+          POSTGRES_PASSWORD: winevault_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U winevault -d winevault_ci"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://winevault:winevault_ci@127.0.0.1:5432/winevault_ci?sslmode=disable
+      HTTP_ADDR: 127.0.0.1:8080
+      AUTH_COOKIE_SECURE: 'false'
+      WINEVAULT_TEST_USERNAME: ci-owner
+      WINEVAULT_TEST_PASSWORD: ci-only-password-12345
+      WINEVAULT_LEGACY_JSON: /nonexistent-ci-legacy.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Install browser and system dependencies
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Build and start test servers
+        run: |
+          echo "WINEVAULT_API_LOG=$RUNNER_TEMP/winevault-api.log" >> "$GITHUB_ENV"
+          go build -C backend -o "$RUNNER_TEMP/winevault-api" .
+          (cd backend && "$RUNNER_TEMP/winevault-api" > "$RUNNER_TEMP/winevault-api.log" 2>&1) &
+          node frontend/.output/server/index.mjs > "$RUNNER_TEMP/winevault-frontend.log" 2>&1 &
+      - name: Wait for test servers
+        run: |
+          for url in http://127.0.0.1:8080/api/auth/status http://localhost:3000; do
+            curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused --retry-all-errors "$url" > /dev/null
+          done
+      - name: Create isolated CI owner and cellar fixture
+        working-directory: frontend
+        env:
+          WINEVAULT_CI_BOOTSTRAP: '1'
+        run: node tests/seed-ci.mjs
+      - name: Run mocked browser suites
+        working-directory: frontend
+        run: npm run test:browser
+      - name: Run browser suites against the real API
+        working-directory: frontend
+        run: npm run test:e2e
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-diagnostics
+          path: |
+            ${{ runner.temp }}/winevault-api.log
+            ${{ runner.temp }}/winevault-frontend.log
+            frontend/tests/*.png
+          retention-days: 7

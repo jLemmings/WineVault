@@ -226,7 +226,7 @@ go test -v ./...
 
 These verify database reads/writes, metadata loading, concurrent duplicate-slot protection, idempotent migrations, legacy import, and migration rollback. Without `TEST_DATABASE_URL`, database tests are skipped.
 
-With the API and frontend running, execute `node tests/browser.mjs` from `frontend/` for desktop/mobile and inventory flow checks. It uses installed Microsoft Edge and temporarily adds a test bottle before removing it.
+With the API and frontend running, execute `node tests/browser.mjs` from `frontend/` for desktop/mobile and inventory flow checks. It uses Playwright Chromium and temporarily adds a test bottle before removing it. Set `BROWSER_CHANNEL=msedge` to use an installed Microsoft Edge instead.
 
 Run `node tests/editors.mjs` from `frontend/` to check dragging, room save/reload, draft cancellation, shelf resizing, bottle preservation, creation/removal, and mobile editors. This check temporarily edits the development cellar and restores its original settings afterward. PostgreSQL integration tests additionally cover invalid geometry, occupied-slot protection, stale edits, and migration persistence in isolated test schemas.
 
@@ -331,3 +331,25 @@ Validation: `node tests/collection-tools.mjs` covers saved views and defaults, e
 slot finding, immediate undo, conflict recovery, mobile layout, and keyboard focus.
 `node tests/getting-started.mjs` covers the empty-cellar guide, sample shelf creation,
 rack-only setup, repeat additions, setup persistence, and completion with mocked APIs.
+
+## Continuous integration
+
+`.github/workflows/checks.yml` runs on branch pushes, pull requests, and manual
+requests. The release workflow also calls it and waits for every job to pass before
+building and publishing an image.
+
+- **Lint:** repository Prettier checks, Go formatting, and `go vet`.
+- **Backend:** `go test -race -count=1 ./...` with PostgreSQL 17 so database
+  integration tests run as well as unit tests.
+- **Frontend:** unit tests, production build, all six mocked browser suites, and
+  all three live API browser suites using Playwright Chromium.
+
+The live browser job creates a fresh owner, shelf, and bottle in its own disposable
+PostgreSQL service. It requires no account secrets or external wine API keys.
+Server logs and available screenshots are uploaded if the frontend job fails.
+`tests/seed-ci.mjs` refuses to bootstrap an already configured installation.
+
+From `frontend/`, the corresponding commands are `npm run lint`, `npm test`,
+`npm run test:browser`, and `npm run test:e2e`. Browser suites require a running app
+and `npx playwright install chromium`; live suites additionally require the test
+owner credentials described above. CI starts the production build and Go API for you.

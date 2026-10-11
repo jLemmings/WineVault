@@ -28,7 +28,7 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-The GitHub Actions workflow is configured to run on tag pushes and publish the image to GHCR. It also creates a `latest` tag from the default branch.
+The GitHub Actions workflow runs the reusable lint, frontend, and backend checks before building and publishing the image to GHCR on tag pushes. A failed check blocks publication. It also creates a `latest` tag from the default branch.
 
 ## 3. Trigger the GitHub Action
 
