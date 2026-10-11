@@ -302,3 +302,32 @@ Verification: run Go integration tests with `TEST_DATABASE_URL`; run `node --tes
 Frontend source, styles, JSON/YAML configuration, and documentation use the pinned Prettier version and root `.prettierrc.json`. From `frontend/`, run `npm run format` to format supported files or `npm run format:check` to verify them. Generated output, dependencies, secrets, and imported data are excluded.
 
 Go source uses `gofmt` with imports grouped by `goimports`. PostgreSQL migrations and long embedded SQL queries use `pg_format` with four-space indentation and uppercase keywords. Shell scripts use `shfmt -i 2`. The root `.editorconfig` defines indentation and line endings for editors.
+
+## Everyday shortcuts and getting started
+
+Open a wine and choose **Add more of this wine** to prefill its name, vintage,
+region, and type. Enter the new quantity and purchase details, review the suggested
+free slots, and confirm the addition.
+
+In Wine Collection, name and save the current filters, search, sorting, and grouping
+under **Saved view**. Choose **Use as default** to open that view after signing in.
+Saved views and the default are stored on the current browser; they do not sync
+across devices. Deleting a view also removes it as the default.
+
+Choose **Find my bottle** in the collection or bottle details to open its rack,
+highlight and focus its exact slot, and show a large shelf address. For grouped
+wines, this finds the representative bottle; open the wine to select another bottle.
+
+**Undo** after marking a bottle enjoyed immediately restores its original location.
+If that slot is unavailable, History opens so you can choose another location.
+
+Empty collections show a getting-started guide with rack-only setup, shelf creation,
+first-wine entry, and bottle finding. New shelves offer compact (12), standard (30),
+and large (72) sample layouts that can be adjusted before saving. The guide stays
+open as you add your first wine, can be skipped, and can be reopened from Settings.
+Guide progress is stored on the current browser.
+
+Validation: `node tests/collection-tools.mjs` covers saved views and defaults, exact
+slot finding, immediate undo, conflict recovery, mobile layout, and keyboard focus.
+`node tests/getting-started.mjs` covers the empty-cellar guide, sample shelf creation,
+rack-only setup, repeat additions, setup persistence, and completion with mocked APIs.

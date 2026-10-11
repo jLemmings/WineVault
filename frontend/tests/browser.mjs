@@ -42,7 +42,7 @@ try {
   await waitCount(baseline + 1);
   await page.getByRole('button', { name: 'Wine collection', exact: false }).first().click();
   await page.locator('.search input').fill(wineName);
-  await page.locator('.wine-table>button').click();
+  await page.locator('.wine-table>.collection-row .wine-detail-link').click();
   await page.getByRole('button', { name: 'Mark as enjoyed' }).click();
   await waitCount(baseline);
   await page.getByRole('button', { name: 'My cellar', exact: true }).click();

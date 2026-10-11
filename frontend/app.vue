@@ -203,9 +203,181 @@
     await refresh();
     notify('Bottle restored to your cellar.');
   }
-  function undoEnjoyed() {
-    section.value = 'History';
-    toast.value = '';
+  const undoBottle = ref(null),
+    undoBusy = ref(false);
+  async function undoEnjoyed() {
+    if (undoBusy.value || !undoBottle.value) return;
+    undoBusy.value = true;
+    const bottle = undoBottle.value;
+    try {
+      await $fetch(`/api/bottles/${encodeURIComponent(bottle.id)}/restore`, {
+        method: 'POST',
+        body: { rack: bottle.rack, slot: bottle.slot },
+        retry: 0,
+      });
+      await restored();
+      undoBottle.value = null;
+      notify('Bottle restored to its original slot.');
+    } catch (e) {
+      if (
+        e.status === 409 ||
+        e.statusCode === 409 ||
+        e.status === 400 ||
+        e.statusCode === 400 ||
+        e.status === 404 ||
+        e.statusCode === 404
+      ) {
+        await refresh();
+        section.value = 'History';
+        notify('The original slot is unavailable. Choose a free slot below.');
+      } else notify('Could not restore bottle. Try Undo again.', true);
+    } finally {
+      undoBusy.value = false;
+    }
+  }
+
+  const locatedId = ref('');
+  const locatedBottle = computed(() => bottles.value.find((b) => b.id === locatedId.value));
+  async function findBottle(bottle) {
+    detail.value = null;
+    section.value = 'My cellar';
+    view.value = 'racks';
+    selected.value = bottle.rack;
+    rackFilter.value = bottle.rack;
+    locatedId.value = bottle.id;
+    await nextTick();
+    const target = document.getElementById('located-bottle-' + bottle.id);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.focus({ preventScroll: true });
+  }
+  function addMore(bottle) {
+    add(bottle.rack);
+    Object.assign(form, {
+      name: bottle.name,
+      vintage: bottle.vintage,
+      region: bottle.region,
+      type: bottle.type,
+    });
+    applyPlacement();
+  }
+
+  const savedViews = ref([]),
+    defaultView = ref(''),
+    viewName = ref(''),
+    activeView = ref('');
+  const guideDismissed = ref(true),
+    guideOpen = ref(false),
+    guideFound = ref(false);
+  const viewError = ref('');
+  function persistViews() {
+    try {
+      localStorage.setItem(
+        'winevault-views-v1',
+        JSON.stringify({ views: savedViews.value, defaultId: defaultView.value }),
+      );
+      viewError.value = '';
+    } catch {
+      viewError.value = 'Browser storage is unavailable. These views will last until you reload.';
+    }
+  }
+  function applySavedView(id) {
+    const saved = savedViews.value.find((v) => v.id === id);
+    if (!saved) return;
+    query.value = saved.query;
+    filter.value = saved.filter;
+    collectionRack.value = racks.value.some((r) => r.id === saved.rack) ? saved.rack : 'all';
+    regionFilter.value = regions.value.includes(saved.region) ? saved.region : 'all';
+    windowFilter.value = saved.window;
+    sort.value = saved.sort;
+    grouped.value = saved.grouped;
+    activeView.value = id;
+    section.value = 'Wine collection';
+  }
+  function saveView() {
+    const name = viewName.value.trim();
+    if (!name) return;
+    const id =
+      globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    savedViews.value.push({
+      id,
+      name,
+      query: query.value,
+      filter: filter.value,
+      rack: collectionRack.value,
+      region: regionFilter.value,
+      window: windowFilter.value,
+      sort: sort.value,
+      grouped: grouped.value,
+    });
+    activeView.value = id;
+    viewName.value = '';
+    persistViews();
+  }
+  function deleteView() {
+    savedViews.value = savedViews.value.filter((v) => v.id !== activeView.value);
+    if (defaultView.value === activeView.value) defaultView.value = '';
+    activeView.value = '';
+    persistViews();
+  }
+  function dismissGuide() {
+    guideOpen.value = false;
+    guideDismissed.value = true;
+    try {
+      localStorage.setItem('winevault-guide-complete', '1');
+    } catch {}
+  }
+  async function useSimpleView() {
+    if (saving.value) return;
+    saving.value = true;
+    try {
+      await $fetch('/api/cellar/preferences', {
+        method: 'PUT',
+        body: {
+          revision: cellar.value.revision,
+          viewMode: 'racks-only',
+          typeRacks: { ...cellar.value.preferences?.typeRacks },
+        },
+        retry: 0,
+      });
+      await refresh();
+      notify('Rack-only view saved.');
+    } catch {
+      notify('Could not save the view. Please try again.');
+    } finally {
+      saving.value = false;
+    }
+  }
+  let browserPreferencesLoaded = false;
+  function loadBrowserPreferences() {
+    if (browserPreferencesLoaded || !import.meta.client) return;
+    browserPreferencesLoaded = true;
+    try {
+      guideDismissed.value = localStorage.getItem('winevault-guide-complete') === '1';
+      guideOpen.value =
+        !guideDismissed.value &&
+        (!bottles.value.length || localStorage.getItem('winevault-guide-started') === '1');
+      if (guideOpen.value) localStorage.setItem('winevault-guide-started', '1');
+      const data = JSON.parse(localStorage.getItem('winevault-views-v1') || '{}');
+      savedViews.value = Array.isArray(data.views)
+        ? data.views.filter(
+            (v) =>
+              v &&
+              typeof v.id === 'string' &&
+              typeof v.name === 'string' &&
+              typeof v.query === 'string' &&
+              ['name', 'vintage', 'window'].includes(v.sort) &&
+              typeof v.grouped === 'boolean' &&
+              typeof v.filter === 'string' &&
+              typeof v.rack === 'string' &&
+              typeof v.region === 'string' &&
+              typeof v.window === 'string',
+          )
+        : [];
+      defaultView.value = typeof data.defaultId === 'string' ? data.defaultId : '';
+      applySavedView(defaultView.value);
+    } catch {
+      guideDismissed.value = false;
+    }
   }
   async function refresh() {
     try {
@@ -216,6 +388,7 @@
         selected.value = data.racks[0]?.id ?? '';
       error.value = '';
       loaded.value = true;
+      loadBrowserPreferences();
       return true;
     } catch {
       error.value =
@@ -237,6 +410,10 @@
     shelfEditing.value = false;
     toast.value = '';
     undoId.value = '';
+    undoBottle.value = null;
+    locatedId.value = '';
+    guideOpen.value = false;
+    browserPreferencesLoaded = false;
   }
   async function signOut() {
     try {
@@ -386,6 +563,7 @@
     saving.value = true;
     try {
       await $fetch('/api/bottles', { method: 'DELETE', query: { id: detail.value.id } });
+      undoBottle.value = { ...detail.value };
       undoId.value = detail.value.id;
       detail.value = null;
       await refresh();
@@ -459,7 +637,7 @@
             />
           </div>
         </header>
-        <main>
+        <main :class="{ 'with-guide': guideOpen || (!guideDismissed && !bottles.length) }">
           <div class="page-heading">
             <div>
               <div class="eyebrow">A PLACE FOR EVERY BOTTLE</div>
@@ -510,6 +688,54 @@
               </div>
             </div>
 
+            <section
+              v-if="guideOpen || (!guideDismissed && !bottles.length)"
+              class="panel ux-guide"
+              aria-label="Getting started"
+            >
+              <h2>Make yourself at home</h2>
+              <p>Start with a shelf, add a wine, then learn where to find it.</p>
+              <button
+                class="editor-secondary"
+                :disabled="saving || racksOnly"
+                @click="useSimpleView"
+              >
+                {{ racksOnly ? 'Rack-only view selected' : 'Start with rack-only view' }}
+              </button>
+              <ol>
+                <li>
+                  <strong>{{ racks.length ? '✓' : '1.' }} Create a shelf</strong>
+                  <p>
+                    Choose a sample size in the shelf editor and adjust it to match your storage.
+                  </p>
+                  <button class="editor-secondary" @click="editShelf()">Add shelf</button>
+                </li>
+                <li>
+                  <strong>{{ bottles.length ? '✓' : '2.' }} Add your first wine</strong>
+                  <p>Enter details manually or fill them from a label photo.</p>
+                  <button class="editor-secondary" :disabled="!racks.length" @click="add()">
+                    Add wine
+                  </button>
+                </li>
+                <li>
+                  <strong>{{ guideFound ? '✓' : '3.' }} Find your bottle</strong>
+                  <p>Follow the shelf address to the highlighted slot.</p>
+                  <button
+                    class="editor-secondary"
+                    :disabled="!bottles.length"
+                    @click="
+                      guideFound = true;
+                      findBottle(bottles[0]);
+                    "
+                  >
+                    Find my first bottle
+                  </button>
+                </li>
+              </ol>
+              <button class="editor-secondary" @click="dismissGuide">
+                {{ guideFound ? 'Finish setup' : 'Skip for now' }}
+              </button>
+            </section>
             <PurchaseTracker
               v-if="section === 'Purchases'"
               :key="bottles.map((b) => b.id + ':' + b.revision).join(',')"
@@ -537,6 +763,47 @@
                   />
                 </div>
               </div>
+              <form class="saved-views" @submit.prevent="saveView">
+                <label
+                  >Saved view<select v-model="activeView" @change="applySavedView(activeView)">
+                    <option value="">Choose a view</option>
+                    <option v-for="v in savedViews" :key="v.id" :value="v.id">{{ v.name }}</option>
+                  </select></label
+                >
+                <label
+                  >View name<input
+                    v-model="viewName"
+                    maxlength="60"
+                    placeholder="e.g. Ready to drink"
+                /></label>
+                <button class="editor-secondary" :disabled="!viewName.trim()">
+                  Save current filters
+                </button>
+                <button
+                  v-if="activeView"
+                  type="button"
+                  class="editor-secondary"
+                  @click="
+                    defaultView = defaultView === activeView ? '' : activeView;
+                    persistViews();
+                  "
+                >
+                  {{ defaultView === activeView ? 'Remove as default' : 'Use as default' }}
+                </button>
+                <button
+                  v-if="activeView"
+                  type="button"
+                  class="editor-secondary"
+                  @click="deleteView"
+                >
+                  Delete view
+                </button>
+                <small
+                  >Saved on this browser.
+                  {{ defaultView ? 'Your default opens when you sign in.' : '' }}</small
+                >
+                <p v-if="viewError" role="alert">{{ viewError }}</p>
+              </form>
               <div class="collection-filters">
                 <label
                   >Type<select v-model="filter" aria-label="Type">
@@ -595,24 +862,26 @@
                   ><span>{{ grouped ? 'BOTTLES' : 'LOCATION' }}</span
                   ><span>TYPE / WINDOW</span>
                 </div>
-                <button
-                  v-for="b in collectionRows"
-                  :key="b.id"
-                  @click="detail = bottles.find((item) => item.id === b.id)"
-                >
+                <div v-for="b in collectionRows" :key="b.id" class="collection-row">
                   <span
                     ><Wine :size="19" /><span
-                      ><strong>{{ b.name }}</strong
+                      ><button
+                        class="wine-detail-link"
+                        @click="detail = bottles.find((item) => item.id === b.id)"
+                      >
+                        <strong>{{ b.name }}</strong></button
                       ><small>{{ b.region }}</small
                       ><WineInfoBadge :bottle="b" /></span></span
                   ><span>{{ b.vintage || 'NV' }}</span
-                  ><span>{{
-                    grouped
-                      ? b.quantity + ' bottles · View locations'
-                      : (racks.find((r) => r.id === b.rack)?.name || 'Rack ' + b.rack) +
-                        ' · ' +
-                        slotAddress(b)
-                  }}</span
+                  ><span
+                    ><button class="find-bottle-link" @click="findBottle(b)">Find my bottle</button
+                    >{{
+                      grouped
+                        ? b.quantity + ' bottles · View locations'
+                        : (racks.find((r) => r.id === b.rack)?.name || 'Rack ' + b.rack) +
+                          ' · ' +
+                          slotAddress(b)
+                    }}</span
                   ><span class="window-cell"
                     >{{ b.type
                     }}<small :class="['window-badge', windowStatus(b) === 'Ready' ? 'ready' : '']"
@@ -622,7 +891,7 @@
                       ></small
                     ></span
                   >
-                </button>
+                </div>
                 <p v-if="!filtered.length" class="empty">
                   No bottles found. Try another search or add your first wine.
                 </p>
@@ -773,6 +1042,14 @@
                 </aside>
               </div>
               <div v-else class="racks-view">
+                <div v-if="locatedBottle" class="location-banner" role="status">
+                  <strong
+                    >{{ racks.find((r) => r.id === locatedBottle.rack)?.name }} →
+                    {{ slotAddress(locatedBottle) }}</strong
+                  >
+                  <span>{{ locatedBottle.name }} · {{ locatedBottle.vintage || 'NV' }}</span>
+                  <button class="editor-secondary" @click="locatedId = ''">Clear highlight</button>
+                </div>
                 <div class="rack-tabs">
                   <button :class="{ active: rackFilter === 'all' }" @click="rackFilter = 'all'">
                     All racks ({{ racks.length }})</button
@@ -810,9 +1087,15 @@
                       <div class="bottle-grid">
                         <button
                           v-for="slot in r.capacity"
+                          :id="
+                            slotBottle(r.id, slot - 1)?.id === locatedId
+                              ? 'located-bottle-' + locatedId
+                              : undefined
+                          "
                           :class="[
                             'bottle-slot',
                             {
+                              located: slotBottle(r.id, slot - 1)?.id === locatedId,
                               filled: slotBottle(r.id, slot - 1),
                               white: r.color === 'white',
                               gold: r.color === 'gold',
@@ -1013,6 +1296,13 @@
             Vintage {{ detail.vintage || 'NV' }} · Rack {{ detail.rack }} · Slot
             {{ slotAddress(detail) }}
           </p>
+          <div class="detail-shortcuts">
+            <button class="editor-secondary" :disabled="saving" @click="addMore(detail)">
+              Add more of this wine</button
+            ><button class="editor-secondary" :disabled="saving" @click="findBottle(detail)">
+              Find my bottle
+            </button>
+          </div>
           <WineLocation
             :bottle="detail"
             :racks="racks"
@@ -1083,6 +1373,15 @@
             "
           >
             Manage shelves<ArrowRight :size="17" /></button
+          ><button
+            class="editor-secondary"
+            @click="
+              settings = false;
+              guideOpen = true;
+              section = 'My cellar';
+            "
+          >
+            Getting started guide</button
           ><ChangePassword /><button class="primary" @click="signOut">
             <LogOut :size="16" />Sign out
           </button></template

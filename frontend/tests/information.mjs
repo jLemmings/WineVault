@@ -1,6 +1,9 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({
+  ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}),
+  headless: true,
+});
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -91,7 +94,7 @@ await page.route('**/api/**', (route) => {
 try {
   await page.goto(process.env.APP_URL || 'http://localhost:3000');
   await page.getByRole('button', { name: 'Wine collection', exact: false }).first().click();
-  await page.locator('.wine-table>button').first().click();
+  await page.locator('.wine-table>.collection-row .wine-detail-link').first().click();
   const info = page.getByRole('region', { name: 'Wine information', exact: true });
   await info.getByRole('button', { name: 'Fetch information', exact: true }).click();
   await info.getByRole('button', { name: 'Use this wine', exact: true }).click();
@@ -105,7 +108,7 @@ try {
     'Failed refresh must retain cached details',
   );
   await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
-  await page.locator('.wine-table>button').nth(1).click();
+  await page.locator('.wine-table>.collection-row .wine-detail-link').nth(1).click();
   await info.getByText('Merlot', { exact: true }).waitFor();
   assert.equal(fetches, 3, 'Opening cached information must not fetch again');
   await page.setViewportSize({ width: 390, height: 844 });

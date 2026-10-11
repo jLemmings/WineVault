@@ -131,8 +131,10 @@ try {
   await page.reload();
   await page.getByRole('button', { name: 'Wine collection', exact: false }).first().click();
   await page.locator('.search input').fill(unique);
-  await page.locator('.wine-table>button').first().waitFor();
-  assert.ok((await page.locator('.wine-table>button').first().textContent()).includes('NV'));
+  await page.locator('.wine-table>.collection-row').first().waitFor();
+  assert.ok(
+    (await page.locator('.wine-table>.collection-row').first().textContent()).includes('NV'),
+  );
   await page.setViewportSize({ width: 390, height: 844, isMobile: true });
   await page.getByRole('button', { name: 'Scan label', exact: true }).click();
   await dialog.waitFor();
