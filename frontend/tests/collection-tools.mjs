@@ -59,6 +59,7 @@ let bottles = [
     drinkEnd: year + 5,
   },
 ];
+let conflictRestore = false;
 let enjoyed = [],
   history = [];
 await page.route('**/api/**', async (route) => {
@@ -110,6 +111,7 @@ await page.route('**/api/**', async (route) => {
         other.revision++;
       }
     } else if (match[2] === 'restore') {
+      if (conflictRestore) return route.fulfill({ status: 409, body: 'Slot occupied' });
       const old = enjoyed.find((b) => b.id === id);
       bottles.push({ ...old, rack: body.rack, slot: body.slot });
       enjoyed = enjoyed.filter((b) => b.id !== id);
@@ -131,15 +133,15 @@ await page.route('**/api/**', async (route) => {
 try {
   await page.goto(process.env.APP_URL || 'http://localhost:3000');
   await page.getByRole('button', { name: 'Wine collection', exact: false }).first().click();
-  await page.locator('.wine-table>button').first().waitFor();
-  await expect(page.locator('.wine-table>button')).toHaveCount(3);
+  await page.locator('.wine-table>.collection-row').first().waitFor();
+  await expect(page.locator('.wine-table>.collection-row')).toHaveCount(3);
   await page.getByLabel('Group matching wines').check();
-  await expect(page.locator('.wine-table>button')).toHaveCount(2);
+  await expect(page.locator('.wine-table>.collection-row')).toHaveCount(2);
   await page.getByLabel('Region', { exact: true }).selectOption('Italy');
-  await expect(page.locator('.wine-table>button')).toHaveCount(1);
+  await expect(page.locator('.wine-table>.collection-row')).toHaveCount(1);
   await page.getByRole('button', { name: /Drink next ·/ }).click();
-  await expect(page.locator('.wine-table>button')).toHaveCount(1);
-  await page.locator('.wine-table>button').first().click();
+  await expect(page.locator('.wine-table>.collection-row')).toHaveCount(1);
+  await page.locator('.wine-table>.collection-row .wine-detail-link').first().click();
   await page.getByRole('button', { name: 'Edit bottle details', exact: true }).click();
   await page.getByLabel('Wine name', { exact: true }).fill('Corrected Estate');
   await page.getByRole('button', { name: 'Save corrections', exact: true }).click();
@@ -152,15 +154,42 @@ try {
   );
   await page.getByRole('button', { name: 'Mark as enjoyed', exact: true }).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.getByText('Bottle restored to its original slot.', { exact: true }).waitFor();
+  assert.equal(bottles.length, 3);
+  // Saved filters and default survive reload; locator jumps to the exact slot.
+  await page.getByLabel('View name', { exact: true }).fill('Ready reds');
+  await page.getByRole('button', { name: 'Save current filters' }).click();
+  await page.getByRole('button', { name: 'Use as default', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Saved view', exact: true })).toHaveValue(/.+/);
+  await expect(page.getByLabel('Drinking window', { exact: true })).toHaveValue('Drink next');
+  await page
+    .locator('.collection-row')
+    .filter({ hasText: 'Corrected Estate' })
+    .getByRole('button', { name: 'Find my bottle', exact: true })
+    .click();
+  await expect(page.locator('.location-banner')).toContainText('Shelf → A1');
+  await expect(page.locator('.bottle-slot.located')).toHaveCount(1);
+  await expect(page.locator('.bottle-slot.located')).toBeFocused();
+  await page.locator('.bottle-slot.located').click();
+  await page.getByRole('button', { name: 'Add more of this wine' }).click();
+  await expect(page.getByLabel('Wine name', { exact: true })).toHaveValue('Corrected Estate');
+  await expect(page.getByLabel('Vintage', { exact: true })).toHaveValue('2020');
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  // A conflicting original slot falls back to manual recovery.
+  await page.locator('.bottle-slot.located').click();
+  await page.getByRole('button', { name: 'Mark as enjoyed', exact: true }).click();
+  conflictRestore = true;
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await page.getByRole('heading', { name: 'Undo an enjoyed bottle' }).waitFor();
   await page.getByLabel('Empty slot', { exact: true }).selectOption('0');
+  conflictRestore = false;
   await page.getByRole('button', { name: 'Restore bottle', exact: true }).click();
   await page.getByText('No bottles available to restore.').waitFor();
-  assert.equal(bottles.length, 3);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Wine collection', exact: false }).first().click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  await page.locator('.wine-table>button').first().click();
+  await page.locator('.wine-table>.collection-row .wine-detail-link').first().click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   const dialog = page.getByRole('dialog');
   const first = dialog.getByRole('button', { name: 'Close dialog', exact: true }),
@@ -176,6 +205,13 @@ try {
     await page.evaluate(() => document.activeElement?.closest('.wine-table') !== null),
     true,
   );
+  await page.getByRole('button', { name: 'Delete view', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Wine collection', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Saved view', exact: true })).toHaveValue('');
+  await expect(
+    page.getByRole('combobox', { name: 'Saved view', exact: true }).locator('option'),
+  ).toHaveCount(1);
   assert.deepEqual(errors, []);
   console.log(
     'PASS grouping, filters, drink next, editing, windows, enjoyment undo, mobile, Escape and focus restoration. API mocked.',

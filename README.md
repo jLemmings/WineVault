@@ -226,7 +226,7 @@ go test -v ./...
 
 These verify database reads/writes, metadata loading, concurrent duplicate-slot protection, idempotent migrations, legacy import, and migration rollback. Without `TEST_DATABASE_URL`, database tests are skipped.
 
-With the API and frontend running, execute `node tests/browser.mjs` from `frontend/` for desktop/mobile and inventory flow checks. It uses installed Microsoft Edge and temporarily adds a test bottle before removing it.
+With the API and frontend running, execute `node tests/browser.mjs` from `frontend/` for desktop/mobile and inventory flow checks. It uses Playwright Chromium and temporarily adds a test bottle before removing it. Set `BROWSER_CHANNEL=msedge` to use an installed Microsoft Edge instead.
 
 Run `node tests/editors.mjs` from `frontend/` to check dragging, room save/reload, draft cancellation, shelf resizing, bottle preservation, creation/removal, and mobile editors. This check temporarily edits the development cellar and restores its original settings afterward. PostgreSQL integration tests additionally cover invalid geometry, occupied-slot protection, stale edits, and migration persistence in isolated test schemas.
 
@@ -302,3 +302,54 @@ Verification: run Go integration tests with `TEST_DATABASE_URL`; run `node --tes
 Frontend source, styles, JSON/YAML configuration, and documentation use the pinned Prettier version and root `.prettierrc.json`. From `frontend/`, run `npm run format` to format supported files or `npm run format:check` to verify them. Generated output, dependencies, secrets, and imported data are excluded.
 
 Go source uses `gofmt` with imports grouped by `goimports`. PostgreSQL migrations and long embedded SQL queries use `pg_format` with four-space indentation and uppercase keywords. Shell scripts use `shfmt -i 2`. The root `.editorconfig` defines indentation and line endings for editors.
+
+## Everyday shortcuts and getting started
+
+Open a wine and choose **Add more of this wine** to prefill its name, vintage,
+region, and type. Enter the new quantity and purchase details, review the suggested
+free slots, and confirm the addition.
+
+In Wine Collection, name and save the current filters, search, sorting, and grouping
+under **Saved view**. Choose **Use as default** to open that view after signing in.
+Saved views and the default are stored on the current browser; they do not sync
+across devices. Deleting a view also removes it as the default.
+
+Choose **Find my bottle** in the collection or bottle details to open its rack,
+highlight and focus its exact slot, and show a large shelf address. For grouped
+wines, this finds the representative bottle; open the wine to select another bottle.
+
+**Undo** after marking a bottle enjoyed immediately restores its original location.
+If that slot is unavailable, History opens so you can choose another location.
+
+Empty collections show a getting-started guide with rack-only setup, shelf creation,
+first-wine entry, and bottle finding. New shelves offer compact (12), standard (30),
+and large (72) sample layouts that can be adjusted before saving. The guide stays
+open as you add your first wine, can be skipped, and can be reopened from Settings.
+Guide progress is stored on the current browser.
+
+Validation: `node tests/collection-tools.mjs` covers saved views and defaults, exact
+slot finding, immediate undo, conflict recovery, mobile layout, and keyboard focus.
+`node tests/getting-started.mjs` covers the empty-cellar guide, sample shelf creation,
+rack-only setup, repeat additions, setup persistence, and completion with mocked APIs.
+
+## Continuous integration
+
+`.github/workflows/checks.yml` runs on branch pushes, pull requests, and manual
+requests. The release workflow also calls it and waits for every job to pass before
+building and publishing an image.
+
+- **Lint:** repository Prettier checks, Go formatting, and `go vet`.
+- **Backend:** `go test -race -count=1 ./...` with PostgreSQL 17 so database
+  integration tests run as well as unit tests.
+- **Frontend:** unit tests, production build, all six mocked browser suites, and
+  all three live API browser suites using Playwright Chromium.
+
+The live browser job creates a fresh owner, shelf, and bottle in its own disposable
+PostgreSQL service. It requires no account secrets or external wine API keys.
+Server logs and available screenshots are uploaded if the frontend job fails.
+`tests/seed-ci.mjs` refuses to bootstrap an already configured installation.
+
+From `frontend/`, the corresponding commands are `npm run lint`, `npm test`,
+`npm run test:browser`, and `npm run test:e2e`. Browser suites require a running app
+and `npx playwright install chromium`; live suites additionally require the test
+owner credentials described above. CI starts the production build and Go API for you.

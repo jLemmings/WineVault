@@ -3,7 +3,10 @@ import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 
 const base = process.env.APP_URL || 'http://localhost:3000';
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({
+  ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}),
+  headless: true,
+});
 const page = await browser.newPage({
   extraHTTPHeaders: authHeaders,
   viewport: { width: 1440, height: 1000 },

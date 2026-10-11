@@ -118,6 +118,25 @@
           <X :size="21" />
         </button>
       </header>
+      <div v-if="!shelf" class="shelf-presets" role="group" aria-label="Sample shelf layouts">
+        <span>Start with a sample layout:</span>
+        <button
+          v-for="preset in [
+            { name: 'Compact · 12 bottles', rows: 3, columns: 4 },
+            { name: 'Standard · 30 bottles', rows: 5, columns: 6 },
+            { name: 'Large · 72 bottles', rows: 8, columns: 9 },
+          ]"
+          :key="preset.name"
+          class="editor-secondary"
+          :disabled="busy"
+          @click="
+            draft.rows = preset.rows;
+            draft.columns = preset.columns;
+          "
+        >
+          {{ preset.name }}
+        </button>
+      </div>
       <div class="shelf-editor-body">
         <div class="shelf-preview">
           <div class="preview-title">

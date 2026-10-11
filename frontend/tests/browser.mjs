@@ -2,7 +2,10 @@ import { authenticate, authHeaders } from './authenticate.mjs';
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 const baseURL = process.env.APP_URL || 'http://localhost:3000';
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({
+  ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}),
+  headless: true,
+});
 const page = await browser.newPage({
   extraHTTPHeaders: authHeaders,
   viewport: { width: 1440, height: 1050 },
@@ -42,12 +45,12 @@ try {
   await waitCount(baseline + 1);
   await page.getByRole('button', { name: 'Wine collection', exact: false }).first().click();
   await page.locator('.search input').fill(wineName);
-  await page.locator('.wine-table>button').click();
+  await page.locator('.wine-table>.collection-row .wine-detail-link').click();
   await page.getByRole('button', { name: 'Mark as enjoyed' }).click();
   await waitCount(baseline);
   await page.getByRole('button', { name: 'My cellar', exact: true }).click();
   await page.getByRole('button', { name: 'Floor plan', exact: true }).click();
-  await page.locator('.toast button').click();
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'tests/mobile.png', fullPage: true });
   assert.equal(

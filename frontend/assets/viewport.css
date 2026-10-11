@@ -351,3 +351,23 @@
     font-size: 14px;
   }
 }
+
+@media (min-width: 981px) {
+  .main-shell > main.with-guide {
+    overflow-y: auto;
+  }
+  .with-guide .ux-guide {
+    flex-shrink: 0;
+  }
+  .with-guide .cellar-panel,
+  .with-guide .collection {
+    flex: none;
+    min-height: 520px;
+  }
+  .with-guide .racks-view {
+    max-height: 600px;
+  }
+  .saved-views {
+    flex-shrink: 0;
+  }
+}
