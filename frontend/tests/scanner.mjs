@@ -3,7 +3,10 @@ import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 
 const base = process.env.APP_URL || 'http://localhost:3000';
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({
+  ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}),
+  headless: true,
+});
 const page = await browser.newPage({
   extraHTTPHeaders: authHeaders,
   viewport: { width: 1440, height: 1000 },
@@ -116,7 +119,7 @@ try {
   );
   await dialog.getByLabel('Wine name', { exact: true }).fill(unique + ' reviewed');
   await dialog.getByLabel('This is a non-vintage wine (NV)').check();
-  await dialog.getByLabel('Shelf', { exact: true }).selectOption(rack.id);
+  await dialog.getByRole('combobox', { name: 'Shelf', exact: true }).selectOption(rack.id);
   await dialog.getByLabel('Number of bottles').fill('2');
   await dialog.getByRole('button', { name: 'Select first available', exact: true }).click();
   assert.equal(await dialog.locator('.scanner-slots button[aria-pressed="true"]').count(), 2);

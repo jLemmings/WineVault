@@ -7,7 +7,11 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "format": "prettier --write --ignore-unknown --ignore-path ../.prettierignore ..",
-    "format:check": "prettier --check --ignore-unknown --ignore-path ../.prettierignore .."
+    "format:check": "prettier --check --ignore-unknown --ignore-path ../.prettierignore ..",
+    "lint": "npm run format:check",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/auth.mjs && node tests/collection-tools.mjs && node tests/information.mjs && node tests/preferences.mjs && node tests/transfers-purchases.mjs && node tests/getting-started.mjs",
+    "test:e2e": "node tests/browser.mjs && node tests/editors.mjs && node tests/scanner.mjs"
   },
   "dependencies": {
     "lucide-vue-next": "^0.468.0",
